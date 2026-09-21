@@ -72,28 +72,20 @@ export function initDragDrop(container) {
 
   container.addEventListener('dragover', (e) => {
     e.preventDefault();
-    overlay.classList.add('active');
+    overlay.classList.add('visible');
   });
 
   container.addEventListener('dragleave', (e) => {
     if (!container.contains(e.relatedTarget)) {
-      overlay.classList.remove('active');
+      overlay.classList.remove('visible');
     }
   });
 
   container.addEventListener('drop', (e) => {
     e.preventDefault();
-    overlay.classList.remove('active');
+    overlay.classList.remove('visible');
     const file = e.dataTransfer.files[0];
     if (file) loadFromFile(file);
   });
 
-  const fileInput = document.getElementById('file-input');
-  if (fileInput) {
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) loadFromFile(file);
-      fileInput.value = '';
-    });
-  }
 }

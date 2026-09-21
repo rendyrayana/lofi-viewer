@@ -2,226 +2,124 @@ import { state, updateUniforms, applyClayMode, setPixelRatio } from './scene.js'
 import { exportPNG, exportWebM } from './export.js';
 import { loadFromFile } from './loader.js';
 
-const panel = document.getElementById('panel');
-
-function fmt(v, dec = 2) {
-  return parseFloat(v).toFixed(dec);
+// ── helpers ──────────────────────────────────────────────────────────
+function wire(id, event, fn) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(event, fn);
+  return el;
 }
 
-function makeSection(title) {
-  const sec = document.createElement('div');
-  sec.className = 'section';
-
-  const hdr = document.createElement('div');
-  hdr.className = 'section-header';
-  hdr.innerHTML = `${title} <span class="arrow">▾</span>`;
-
-  const body = document.createElement('div');
-  body.className = 'section-body';
-
-  hdr.addEventListener('click', () => {
-    hdr.classList.toggle('collapsed');
-    body.classList.toggle('collapsed');
+function sl(sliderId, valId, decimals, onChange) {
+  const s = document.getElementById(sliderId);
+  const v = document.getElementById(valId);
+  if (!s) return;
+  const fmt = n => decimals === 0 ? Math.round(n) : parseFloat(n).toFixed(decimals);
+  s.addEventListener('input', () => {
+    const n = parseFloat(s.value);
+    if (v) v.textContent = fmt(n);
+    onChange(n);
   });
-
-  sec.appendChild(hdr);
-  sec.appendChild(body);
-  panel.appendChild(sec);
-  return body;
 }
 
-function row(parent, label, children) {
-  const r = document.createElement('div');
-  r.className = 'row';
-
-  const lbl = document.createElement('label');
-  lbl.textContent = label;
-  r.appendChild(lbl);
-
-  children.forEach(c => r.appendChild(c));
-  parent.appendChild(r);
-  return r;
+function tog(checkboxId, onChange) {
+  const el = document.getElementById(checkboxId);
+  if (el) el.addEventListener('change', () => onChange(el.checked));
 }
 
-function slider(min, max, step, initial, onChange) {
-  const wrap = document.createElement('div');
-  wrap.style.display = 'flex';
-  wrap.style.flex = '1';
-  wrap.style.alignItems = 'center';
-  wrap.style.gap = '4px';
-
-  const inp = document.createElement('input');
-  inp.type = 'range';
-  inp.min = min;
-  inp.max = max;
-  inp.step = step;
-  inp.value = initial;
-  inp.style.flex = '1';
-
-  const val = document.createElement('span');
-  val.className = 'val';
-  val.textContent = fmt(initial);
-
-  inp.addEventListener('input', () => {
-    val.textContent = fmt(inp.value);
-    onChange(parseFloat(inp.value));
-  });
-
-  wrap.appendChild(inp);
-  wrap.appendChild(val);
-  return wrap;
-}
-
-function toggle(initial, onChange) {
-  const wrap = document.createElement('div');
-  wrap.className = 'toggle-wrap';
-
-  const label = document.createElement('label');
-  label.className = 'toggle';
-
-  const inp = document.createElement('input');
-  inp.type = 'checkbox';
-  inp.checked = initial;
-
-  const slider = document.createElement('span');
-  slider.className = 'toggle-slider';
-
-  inp.addEventListener('change', () => onChange(inp.checked));
-  label.appendChild(inp);
-  label.appendChild(slider);
-  wrap.appendChild(label);
-  return wrap;
-}
-
-function colorPicker(initial, onChange) {
-  const inp = document.createElement('input');
-  inp.type = 'color';
-  inp.value = initial;
-  inp.addEventListener('input', () => onChange(inp.value));
-  return inp;
-}
-
-function btn(text, onClick) {
-  const b = document.createElement('button');
-  b.className = 'btn';
-  b.textContent = text;
-  b.addEventListener('click', onClick);
-  return b;
-}
-
-// ---- Viewport reference stored from init ----
-let _container;
-
+// ── init ─────────────────────────────────────────────────────────────
 export function initUI(container) {
-  _container = container;
 
-  // ----- PSX Effects -----
-  const psx = makeSection('PSX Effects');
+  // ── Top bar ──────────────────────────────────────────────────────
+  const chipClay = document.getElementById('chip-clay');
+  chipClay?.addEventListener('click', () => {
+    state.clayMode = !state.clayMode;
+    chipClay.classList.toggle('on', state.clayMode);
+    applyClayMode(state.clayMode);
+  });
 
-  row(psx, 'Pixelation', [
-    slider(0.05, 1.0, 0.01, state.pixelRatio, v => {
-      state.pixelRatio = v;
-      setPixelRatio(v, container);
-    })
-  ]);
+  const chipRotate = document.getElementById('chip-rotate');
+  const speedInput = document.getElementById('rotate-speed');
+  chipRotate?.addEventListener('click', () => {
+    state.turntable = !state.turntable;
+    chipRotate.classList.toggle('on', state.turntable);
+    speedInput?.classList.toggle('active-speed', state.turntable);
+  });
+  speedInput?.addEventListener('input', () => {
+    state.turntableSpeed = parseFloat(speedInput.value);
+  });
 
-  row(psx, 'Vtx Snap', [
-    toggle(state.snapVertices, v => { state.snapVertices = v; updateUniforms(); })
-  ]);
-  row(psx, 'Snap Res', [
-    slider(16, 512, 1, state.snapResolution, v => { state.snapResolution = v; updateUniforms(); })
-  ]);
-  row(psx, 'Affine UV', [
-    toggle(state.useAffineUV, v => { state.useAffineUV = v; updateUniforms(); })
-  ]);
-  row(psx, 'Dithering', [
-    toggle(state.useDither, v => { state.useDither = v; updateUniforms(); })
-  ]);
-  row(psx, 'Dither γ', [
-    slider(1.0, 3.0, 0.05, state.ditherGamma, v => { state.ditherGamma = v; updateUniforms(); })
-  ]);
-  row(psx, 'Exposure', [
-    slider(0.1, 3.0, 0.05, state.exposure, v => { state.exposure = v; updateUniforms(); })
-  ]);
-  row(psx, 'Brightness', [
-    slider(-1.0, 1.0, 0.01, state.brightness, v => { state.brightness = v; updateUniforms(); })
-  ]);
-  row(psx, 'Contrast', [
-    slider(0.1, 3.0, 0.05, state.contrast, v => { state.contrast = v; updateUniforms(); })
-  ]);
+  const bgSwatch = document.getElementById('bg-swatch');
+  wire('bg-color', 'input', e => {
+    state.bgColor = e.target.value;
+    if (bgSwatch) bgSwatch.style.background = e.target.value;
+    updateUniforms();
+  });
 
-  // ----- Lighting -----
-  const light = makeSection('Lighting');
+  wire('chip-load', 'click', () => document.getElementById('file-input')?.click());
+  wire('chip-png', 'click', exportPNG);
+  wire('chip-webm', 'click', exportWebM);
 
-  row(light, 'Dir Intensity', [
-    slider(0, 3, 0.05, state.dirIntensity, v => { state.dirIntensity = v; updateUniforms(); })
-  ]);
-  row(light, 'Dir Pitch', [
-    slider(-90, 90, 1, state.dirPitch, v => { state.dirPitch = v; updateUniforms(); })
-  ]);
-  row(light, 'Dir Yaw', [
-    slider(-180, 180, 1, state.dirYaw, v => { state.dirYaw = v; updateUniforms(); })
-  ]);
-  row(light, 'Ambient', [
-    slider(0, 2, 0.05, state.ambientIntensity, v => { state.ambientIntensity = v; updateUniforms(); })
-  ]);
+  wire('file-input', 'change', e => {
+    const f = e.target.files?.[0];
+    if (f) loadFromFile(f);
+    e.target.value = '';
+  });
 
-  // ----- CRT Effects -----
-  const crt = makeSection('CRT Effects');
+  // ── Geometry ─────────────────────────────────────────────────────
+  sl('s-pixel', 'v-pixel', 2, v => {
+    state.pixelRatio = v;
+    setPixelRatio(v, container);
+  });
 
-  row(crt, 'Scanlines', [
-    toggle(state.scanlines, v => { state.scanlines = v; updateUniforms(); }),
-    slider(0, 1, 0.01, state.scanlineIntensity, v => { state.scanlineIntensity = v; updateUniforms(); })
-  ]);
-  row(crt, 'Vignette', [
-    toggle(state.vignette, v => { state.vignette = v; updateUniforms(); }),
-    slider(0, 1, 0.01, state.vignetteDarkness, v => { state.vignetteDarkness = v; updateUniforms(); })
-  ]);
-  row(crt, 'Chromatic Ab', [
-    toggle(state.chromaticAberration, v => { state.chromaticAberration = v; updateUniforms(); }),
-    slider(0, 5, 0.1, state.chromaticAberrationAmount, v => { state.chromaticAberrationAmount = v; updateUniforms(); })
-  ]);
-  row(crt, 'Film Grain', [
-    toggle(state.filmGrain, v => { state.filmGrain = v; updateUniforms(); }),
-    slider(0, 2, 0.05, state.grainIntensity, v => { state.grainIntensity = v; updateUniforms(); })
-  ]);
-  row(crt, 'Warble', [
-    toggle(state.warble, v => { state.warble = v; updateUniforms(); }),
-    slider(0, 5, 0.1, state.warbleAmount, v => { state.warbleAmount = v; updateUniforms(); })
-  ]);
+  tog('t-snap', v => { state.snapVertices = v; updateUniforms(); });
 
-  // ----- Scene -----
-  const scn = makeSection('Scene');
+  sl('s-snap', 'v-snap', 0, v => { state.snapResolution = v; updateUniforms(); });
 
-  row(scn, 'Background', [
-    colorPicker(state.bgColor, v => { state.bgColor = v; updateUniforms(); })
-  ]);
-  row(scn, 'Clay Mode', [
-    toggle(state.clayMode, v => applyClayMode(v))
-  ]);
-  row(scn, 'Turntable', [
-    toggle(state.turntable, v => { state.turntable = v; }),
-    slider(0.1, 3.0, 0.05, state.turntableSpeed, v => { state.turntableSpeed = v; })
-  ]);
+  tog('t-affine', v => { state.useAffineUV = v; updateUniforms(); });
 
-  // ----- Load Model -----
-  const load = makeSection('Load Model');
+  // ── Color ─────────────────────────────────────────────────────────
+  tog('t-dither', v => { state.useDither = v; updateUniforms(); });
+  sl('s-dither-g', 'v-dither-g', 2, v => { state.ditherGamma = v; updateUniforms(); });
+  sl('s-exposure', 'v-exposure', 2, v => { state.exposure = v; updateUniforms(); });
+  sl('s-brightness', 'v-brightness', 2, v => { state.brightness = v; updateUniforms(); });
+  sl('s-contrast', 'v-contrast', 2, v => { state.contrast = v; updateUniforms(); });
 
-  const fileBtn = btn('Open File…', () => document.getElementById('file-input').click());
-  fileBtn.id = 'file-pick-btn';
-  load.appendChild(fileBtn);
+  // ── Light ─────────────────────────────────────────────────────────
+  sl('s-dir-i', 'v-dir-i', 2, v => { state.dirIntensity = v; updateUniforms(); });
 
-  const dropHint = document.createElement('div');
-  dropHint.style.cssText = 'font-size:0.66rem;color:#444;text-align:center;padding:4px 0 2px;';
-  dropHint.textContent = 'or drag & drop .glb .obj .fbx .ply';
-  load.appendChild(dropHint);
+  const dirPitchEl = document.getElementById('v-dir-pitch');
+  const sPitch = document.getElementById('s-dir-pitch');
+  sPitch?.addEventListener('input', () => {
+    const n = parseFloat(sPitch.value);
+    if (dirPitchEl) dirPitchEl.textContent = Math.round(n) + '°';
+    state.dirPitch = n;
+    updateUniforms();
+  });
 
-  // ----- Export -----
-  const exp = makeSection('Export');
+  const dirYawEl = document.getElementById('v-dir-yaw');
+  const sYaw = document.getElementById('s-dir-yaw');
+  sYaw?.addEventListener('input', () => {
+    const n = parseFloat(sYaw.value);
+    if (dirYawEl) dirYawEl.textContent = Math.round(n) + '°';
+    state.dirYaw = n;
+    updateUniforms();
+  });
 
-  const exportRow = document.createElement('div');
-  exportRow.className = 'row';
-  exportRow.appendChild(btn('PNG', exportPNG));
-  exportRow.appendChild(btn('WebM (1 rot)', exportWebM));
-  exp.appendChild(exportRow);
+  sl('s-ambient', 'v-ambient', 2, v => { state.ambientIntensity = v; updateUniforms(); });
+
+  // ── CRT ───────────────────────────────────────────────────────────
+  tog('t-scan', v => { state.scanlines = v; updateUniforms(); });
+  sl('s-scan', 'v-scan', 2, v => { state.scanlineIntensity = v; updateUniforms(); });
+
+  tog('t-vig', v => { state.vignette = v; updateUniforms(); });
+  sl('s-vig', 'v-vig', 2, v => { state.vignetteDarkness = v; updateUniforms(); });
+
+  tog('t-chroma', v => { state.chromaticAberration = v; updateUniforms(); });
+  sl('s-chroma', 'v-chroma', 1, v => { state.chromaticAberrationAmount = v; updateUniforms(); });
+
+  tog('t-grain', v => { state.filmGrain = v; updateUniforms(); });
+  sl('s-grain', 'v-grain', 2, v => { state.grainIntensity = v; updateUniforms(); });
+
+  tog('t-warble', v => { state.warble = v; updateUniforms(); });
+  sl('s-warble', 'v-warble', 1, v => { state.warbleAmount = v; updateUniforms(); });
 }

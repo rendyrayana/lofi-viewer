@@ -4,14 +4,15 @@ import { initDragDrop } from './loader.js';
 
 const viewport = document.getElementById('viewport');
 
-// Boot
-initScene(viewport);
-initUI(viewport);
-initDragDrop(viewport);
+// Boot after first layout paint so clientWidth/Height are non-zero
+requestAnimationFrame(() => {
+  initScene(viewport);
+  initUI(viewport);
+  initDragDrop(viewport);
 
-// Render loop
-function loop() {
-  requestAnimationFrame(loop);
-  tick();
-}
-loop();
+  function loop() {
+    requestAnimationFrame(loop);
+    tick();
+  }
+  loop();
+});
