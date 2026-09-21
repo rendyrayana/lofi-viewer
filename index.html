@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lofi-viewer — PSX 3D Model Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #0a0a0a;
+      color: #ccc;
+      font-family: 'Courier New', Courier, monospace;
+      overflow: hidden;
+    }
+
+    #app {
+      display: flex;
+      width: 100%; height: 100%;
+    }
+
+    #viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #viewport canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    #drop-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(74,158,255,0.10);
+      border: 2px dashed #4a9eff;
+      font-size: 1.4rem;
+      color: #4a9eff;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #drop-overlay.active { display: flex; }
+
+    #loading-bar {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 3px;
+      background: #4a9eff;
+      width: 0%;
+      transition: width 0.2s;
+      z-index: 20;
+    }
+
+    /* ---- Panel ---- */
+    #panel {
+      width: 260px;
+      min-width: 260px;
+      height: 100%;
+      background: #111;
+      border-left: 1px solid #1f1f1f;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      scrollbar-width: thin;
+      scrollbar-color: #333 transparent;
+    }
+
+    #panel::-webkit-scrollbar { width: 5px; }
+    #panel::-webkit-scrollbar-track { background: transparent; }
+    #panel::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    .panel-title {
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      letter-spacing: 0.12em;
+      color: #4a9eff;
+      border-bottom: 1px solid #1f1f1f;
+      text-transform: uppercase;
+    }
+
+    .section {
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    .section-header {
+      padding: 8px 14px;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #555;
+      background: #1a1a1a;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .section-header:hover { color: #888; }
+    .section-header .arrow { transition: transform 0.2s; }
+    .section-header.collapsed .arrow { transform: rotate(-90deg); }
+
+    .section-body {
+      padding: 8px 14px;
+    }
+    .section-body.collapsed { display: none; }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 0.72rem;
+      color: #888;
+      white-space: nowrap;
+      min-width: 90px;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      height: 3px;
+      background: #2a2a2a;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #4a9eff;
+      cursor: pointer;
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #4a9eff;
+      border: none;
+      cursor: pointer;
+    }
+
+    .val {
+      font-size: 0.68rem;
+      color: #555;
+      min-width: 32px;
+      text-align: right;
+    }
+
+    /* toggle pill */
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .toggle {
+      position: relative;
+      width: 30px; height: 16px;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #2a2a2a;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 12px; height: 12px;
+      left: 2px; top: 2px;
+      background: #555;
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: #1a3a5c; }
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(14px);
+      background: #4a9eff;
+    }
+
+    input[type=color] {
+      width: 28px; height: 20px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    button.btn {
+      flex: 1;
+      padding: 6px 8px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      color: #ccc;
+      font-family: inherit;
+      font-size: 0.72rem;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    button.btn:hover {
+      background: #222;
+      border-color: #4a9eff;
+      color: #4a9eff;
+    }
+    button.btn:active { background: #111; }
+
+    #file-pick-btn {
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 640px) {
+      #app { flex-direction: column; }
+      #panel {
+        width: 100%;
+        min-width: unset;
+        height: 220px;
+        border-left: none;
+        border-top: 1px solid #1f1f1f;
+        flex-shrink: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="viewport">
+    <div id="drop-overlay">Drop model here (.glb .obj .fbx .ply)</div>
+    <div id="loading-bar"></div>
+  </div>
+  <div id="panel">
+    <div class="panel-title">lofi-viewer</div>
+    <!-- UI injected by ui.js -->
+  </div>
+</div>
+<input type="file" id="file-input" accept=".glb,.obj,.fbx,.ply" style="display:none" />
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
