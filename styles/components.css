@@ -159,7 +159,7 @@ body {
   transition: color 0.15s, background 0.15s;
 }
 #cam-toolbar .tb-btn:hover { color: #e6e6e4; background: rgba(255,255,255,0.08); }
-#cam-toolbar .tb-btn.active { color: #e6e6e4; }
+#cam-toolbar .tb-btn.active { color: #e6e6e4; background: rgba(255,255,255,0.14); }
 #cam-toolbar .tb-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.12); margin: 0 4px; }
 #cam-toolbar .tb-speed {
   font-family: 'Space Mono', monospace;
@@ -391,6 +391,35 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 4px;
 }
 .btn-ghost:hover { border-color: var(--c-text-dim); color: var(--c-text); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Recording progress ──────────────────────────────────────────────────── */
+.record-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.record-progress-track {
+  flex: 1;
+  height: 4px;
+  background: var(--c-border-strong);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.record-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--c-accent);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+.record-progress-label {
+  font-size: 11px;
+  color: var(--c-text-dim);
+  min-width: 30px;
+  text-align: right;
+}
 
 /* ── Select ──────────────────────────────────────────────────────────────── */
 select {

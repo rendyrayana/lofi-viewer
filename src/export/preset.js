@@ -5,7 +5,7 @@ const PRESET_KEYS = [
   'affineWarp','textureFilter','wireframe','backfaceCulling',
   'bgType','bgColor','ambientIntensity','keyLightIntensity','lightColor',
   'exposure','fogDensity','fogColor',
-  'projection','fov','turntable','rotationSpeed','autoFrame',
+  'projection','fov','turntable','rotationSpeed','autoFrame','aspectRatio',
   'crtCurvature','scanlines','scanlineOpacity','vignette','chromaticAberration',
   'filmGrain','colorGrade','bloom','bloomIntensity',
 ];

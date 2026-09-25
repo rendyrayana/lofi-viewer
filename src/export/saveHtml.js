@@ -238,10 +238,13 @@ const CRT_FRAG = \`
 uniform sampler2D tDiffuse;
 uniform float uCurvature;
 uniform float uVignette;
+uniform float uAspect;
 varying vec2 vUv;
 vec2 barrel(vec2 uv, float k) {
   vec2 p = uv * 2.0 - 1.0;
+  p.x *= uAspect;
   p *= 1.0 + k * dot(p, p);
+  p.x /= uAspect;
   return p * 0.5 + 0.5;
 }
 void main() {
@@ -276,10 +279,13 @@ uniform float uScanlineOpacity;
 uniform float uDPR;
 uniform float uCurvature;
 uniform float uScreenH;
+uniform float uAspect;
 varying vec2 vUv;
 vec2 barrel(vec2 uv, float k) {
   vec2 p = uv * 2.0 - 1.0;
+  p.x *= uAspect;
   p *= 1.0 + k * dot(p, p);
+  p.x /= uAspect;
   return p * 0.5 + 0.5;
 }
 float rand(vec2 co) { return fract(sin(dot(co, vec2(12.9898,78.233))) * 43758.5453); }
@@ -416,7 +422,7 @@ class PSXPipeline {
       depthTest:false, depthWrite:false,
     });
 
-    this.crtUniforms = { tDiffuse:{value:null}, uCurvature:{value:0.0}, uVignette:{value:0.3} };
+    this.crtUniforms = { tDiffuse:{value:null}, uCurvature:{value:0.0}, uVignette:{value:0.3}, uAspect:{value:1.0} };
     this.crtMat = new THREE.ShaderMaterial({
       uniforms: this.crtUniforms, vertexShader: PASS_VERT, fragmentShader: CRT_FRAG,
       depthTest:false, depthWrite:false,
@@ -430,6 +436,7 @@ class PSXPipeline {
       uScanlines:{value:0.0}, uScanlineOpacity:{value:0.5},
       uDPR:{value:dpr}, uCurvature:{value:0.0},
       uScreenH:{value:Math.max(1, this.renderer.domElement.height)},
+      uAspect:{value:1.0},
     };
     this.fxMat = new THREE.ShaderMaterial({
       uniforms: this.fxUniforms, vertexShader: PASS_VERT, fragmentShader: FX_FRAG,
@@ -549,8 +556,11 @@ class PSXPipeline {
 
   resize(w, h) {
     const dpr = this.renderer.getPixelRatio();
-    this.fxUniforms.uDPR.value     = dpr;
-    this.fxUniforms.uScreenH.value = Math.max(1, Math.floor(h * dpr));
+    const aspect = h > 0 ? w / h : 1;
+    this.crtUniforms.uAspect.value  = aspect;
+    this.fxUniforms.uAspect.value   = aspect;
+    this.fxUniforms.uDPR.value      = dpr;
+    this.fxUniforms.uScreenH.value  = Math.max(1, Math.floor(h * dpr));
     const pw = Math.max(1, Math.floor(w * dpr));
     const ph = Math.max(1, Math.floor(h * dpr));
     this.rtA.setSize(pw, ph); this.rtB.setSize(pw, ph);
@@ -583,7 +593,22 @@ class PSXPipeline {
 }
 
 // ── Scene setup ──────────────────────────────────────────────────────────────
-const canvas   = document.getElementById('c');
+const canvas = document.getElementById('c');
+
+// Apply aspect-ratio constraint before sizing the renderer so getBoundingClientRect is correct.
+const ASPECT_CSS_MAP = {'1:1':'1/1','4:3':'4/3','16:9':'16/9','16:10':'16/10','3:2':'3/2','2.39:1':'239/100','320:240':'320/240','256:224':'256/224'};
+const _ar = SETTINGS.aspectRatio ?? 'free';
+if (_ar !== 'free' && ASPECT_CSS_MAP[_ar]) {
+  document.body.style.display = 'flex';
+  document.body.style.alignItems = 'center';
+  document.body.style.justifyContent = 'center';
+  canvas.style.aspectRatio = ASPECT_CSS_MAP[_ar];
+  canvas.style.width = 'auto';
+  canvas.style.height = 'auto';
+  canvas.style.maxWidth = '100%';
+  canvas.style.maxHeight = '100%';
+}
+
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -673,7 +698,9 @@ ${loaderCall}
 
 // ── Resize ───────────────────────────────────────────────────────────────────
 function resizeAll() {
-  const w = window.innerWidth, h = window.innerHeight;
+  const r = canvas.getBoundingClientRect();
+  const w = r.width  || window.innerWidth;
+  const h = r.height || window.innerHeight;
   renderer.setSize(w, h, false);
   pipeline.resize(w, h);
   if (camera.isPerspectiveCamera) {

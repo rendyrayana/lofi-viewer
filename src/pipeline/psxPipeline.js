@@ -112,6 +112,7 @@ export class PSXPipeline {
       tDiffuse:   { value: null },
       uCurvature: { value: 0.0 },
       uVignette:  { value: 0.3 },
+      uAspect:    { value: 1.0 },
     };
     this.crtMat = new THREE.ShaderMaterial({
       uniforms: this.crtUniforms,
@@ -134,6 +135,7 @@ export class PSXPipeline {
       uDPR:              { value: this.renderer.getPixelRatio() },
       uCurvature:        { value: 0.0 },
       uScreenH:          { value: Math.max(1, this.renderer.domElement.height) },
+      uAspect:           { value: 1.0 },
     };
     this.fxMat = new THREE.ShaderMaterial({
       uniforms: this.fxUniforms,
@@ -292,8 +294,11 @@ export class PSXPipeline {
 
   resize(w, h) {
     const dpr = this.renderer.getPixelRatio();
-    this.fxUniforms.uDPR.value     = dpr;
-    this.fxUniforms.uScreenH.value = Math.max(1, Math.floor(h * dpr));
+    const aspect = h > 0 ? w / h : 1;
+    this.crtUniforms.uAspect.value  = aspect;
+    this.fxUniforms.uAspect.value   = aspect;
+    this.fxUniforms.uDPR.value      = dpr;
+    this.fxUniforms.uScreenH.value  = Math.max(1, Math.floor(h * dpr));
     const pw = Math.max(1, Math.floor(w * dpr));
     const ph = Math.max(1, Math.floor(h * dpr));
     this.rtA.setSize(pw, ph);

@@ -103,7 +103,7 @@ function showPanel(tab) {
   } else if (tab === 'effects') {
     buildEffectsPanel(div, { onReset: () => showPanel('effects') });
   } else if (tab === 'export') {
-    buildExportPanel(div, () => sc.renderer, () => pipeline, enterViewerMode, () => saveViewerHtml(loadedModelFile, loadedTexFile, {
+    buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, () => saveViewerHtml(loadedModelFile, loadedTexFile, {
       pos:    sc.perspCamera.position.toArray(),
       target: sc.controls.target.toArray(),
       near:   sc.perspCamera.near,
@@ -157,14 +157,28 @@ function updateToolbarProj() {
 }
 updateToolbarProj();
 
-toolbar.querySelector('#tb-orbit').addEventListener('click', () => {
-  sc.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
-});
-toolbar.querySelector('#tb-pan').addEventListener('click', () => {
-  sc.controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
-});
+const tbOrbit = toolbar.querySelector('#tb-orbit');
+const tbPan   = toolbar.querySelector('#tb-pan');
+
+function setNavMode(mode) {
+  if (mode === 'orbit') {
+    sc.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    tbOrbit.classList.add('active');
+    tbPan.classList.remove('active');
+  } else {
+    sc.controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+    tbPan.classList.add('active');
+    tbOrbit.classList.remove('active');
+  }
+}
+
+setNavMode('orbit'); // default
+
+tbOrbit.addEventListener('click', () => setNavMode('orbit'));
+tbPan.addEventListener('click', () => setNavMode('pan'));
 toolbar.querySelector('#tb-frame').addEventListener('click', () => {
-  if (loadedModel) sc.frameObject(loadedModel);
+  const target = loadedModel || defaultCube;
+  if (target) sc.frameObject(target);
 });
 toolbar.querySelector('#tb-play').addEventListener('click', () => {
   store.set('turntable', !store.get('turntable'));

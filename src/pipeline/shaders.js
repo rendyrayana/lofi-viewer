@@ -135,6 +135,7 @@ export const CRT_SHADER = {
     tDiffuse: { value: null },
     uCurvature: { value: 0.0 },
     uVignette: { value: 0.3 },
+    uAspect:   { value: 1.0 },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -144,12 +145,15 @@ export const CRT_SHADER = {
     uniform sampler2D tDiffuse;
     uniform float uCurvature;
     uniform float uVignette;
+    uniform float uAspect;
     varying vec2 vUv;
 
     vec2 barrelDistort(vec2 uv, float k) {
       vec2 p = uv * 2.0 - 1.0;
+      p.x *= uAspect;
       float r2 = dot(p, p);
       p *= 1.0 + k * r2;
+      p.x /= uAspect;
       return p * 0.5 + 0.5;
     }
 
@@ -202,11 +206,14 @@ export const FX_SHADER = {
     uniform float uDPR;
     uniform float uCurvature;
     uniform float uScreenH;
+    uniform float uAspect;
     varying vec2 vUv;
 
     vec2 barrelDistort(vec2 uv, float k) {
       vec2 p = uv * 2.0 - 1.0;
+      p.x *= uAspect;
       p *= 1.0 + k * dot(p, p);
+      p.x /= uAspect;
       return p * 0.5 + 0.5;
     }
 
