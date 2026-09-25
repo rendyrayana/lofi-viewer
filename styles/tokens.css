@@ -1,0 +1,29 @@
+:root, :root[data-theme="dark"] {
+  --c-bg: #131217;
+  --c-panel: #18171e;
+  --c-panel-alt: #201f27;
+  --c-border: #28272f;
+  --c-border-strong: #3a3940;
+  --c-text: #f0f0ee;
+  --c-text-dim: #98979c;
+  --c-text-faint: #5c5b61;
+  --c-accent: #f0f0ee;
+}
+
+:root[data-theme="light"] {
+  --c-bg: #f5f5f3;
+  --c-panel: #ffffff;
+  --c-panel-alt: #ebebe9;
+  --c-border: #d6d6d4;
+  --c-border-strong: #b9b9b7;
+  --c-text: #111112;
+  --c-text-dim: #5c5c60;
+  --c-text-faint: #8c8c8f;
+  --c-accent: #111112;
+}
+
+/* Viewport / HUD stays fixed dark regardless of theme */
+#viewport, #hud, #cam-toolbar {
+  --c-vp-bg: #0b0a0f;
+  --c-hud-text: #e6e6e4;
+}

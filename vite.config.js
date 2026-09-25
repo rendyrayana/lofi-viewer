@@ -1,7 +1,2 @@
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  base: './',
-  assetsInclude: ['**/*.glb', '**/*.glsl'],
-  server: { port: 5174 },
-});
+import { defineConfig } from 'vite'
+export default defineConfig({ server: { port: 3000 } })

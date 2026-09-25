@@ -1,7 +1,7 @@
 {
   "name": "lofi-viewer",
-  "version": "1.0.0",
-  "description": "PSX-style 3D model viewer",
+  "version": "0.1.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
