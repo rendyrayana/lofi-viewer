@@ -1,52 +1,65 @@
 # lofi-viewer
 
-A browser-based 3D model viewer that renders through a PS1/PSX-style pipeline — low internal resolution, vertex snapping, affine texture warping, dithered color reduction, and optional CRT post-effects.
+> Browser-based PSX/PS1-style 3D model viewer. Load any model, dial in the retro look, export.
 
-![lofi-viewer screenshot](https://github.com/user-attachments/assets/placeholder)
+**[Live Preview](#)** · **[Project Page](#)** · [Rendy Rayana](https://rendyrayana.my.id)
+
+## Overview
+
+lofi-viewer is a browser-based tool that loads arbitrary 3D models and renders them through a PS1-style pipeline — low internal resolution, vertex snapping, affine texture warping, dithered 15-bit color, and optional CRT post-effects. It covers the full workflow from import to export: tweak the look in the editor, then save a standalone HTML viewer or record a turntable video.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![](docs/screenshot-1.png) | ![](docs/screenshot-2.png) |
+| *PSX render pipeline* | *CRT effects + bloom* |
 
 ## Features
 
-- **PSX render pipeline** — low-res render target, vertex snapping, affine texture warp, 15-bit color dither
-- **Import** — drag & drop or file-pick `.glb`, `.obj`, `.fbx` models; optional separate texture map
-- **Render controls** — render scale, vertex snap precision, color depth, dither pattern, wireframe, backface culling
-- **Environment** — ambient + key light with color picker, HDRI/skybox, fog, background color
-- **Camera** — perspective / orthographic, field of view, aspect ratio presets, auto-frame
-- **Effects** — CRT curvature, scanlines, vignette, chromatic aberration, film grain, color grade, bloom
-- **Export** — snapshot PNG, turntable WebM video (fixed duration or one full loop), save as standalone HTML viewer, copy preset link
-- **Viewer mode** — fullscreen presentation mode with no UI chrome
-- **Floating toolbar** — orbit / pan / frame toggle, turntable play, projection switch
-- **Monochrome UI** — dark/light invert toggle; no hue in the app chrome
+- PSX render pipeline: low-res render target, vertex snapping, affine texture warp, 15-bit color dither
+- Import `.glb`, `.obj`, `.fbx` models with optional separate texture map
+- Render controls: render scale, snap precision, color depth, dither pattern, wireframe, backface culling
+- Environment: ambient + key light with color picker, HDRI/skybox, fog, background color
+- Camera: perspective / orthographic, FOV, aspect ratio presets, auto-frame
+- Effects: CRT curvature, scanlines, vignette, chromatic aberration, film grain, color grade, bloom
+- Export: snapshot PNG, turntable WebM video, standalone self-contained HTML viewer, shareable preset link
+- Viewer mode: fullscreen presentation with no UI chrome
+- Floating toolbar: orbit / pan / frame, turntable play, projection toggle
+- Monochrome UI with dark / light invert toggle
 
-## Getting started
+## Requirements
+
+- Node.js 18+
+- Modern browser with WebGL2 support (Chrome, Firefox, Safari)
+
+## Getting Started
 
 ```bash
+git clone https://github.com/rendyrayana/lofi-viewer
+cd lofi-viewer
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open `http://localhost:3000`. Drop in a model to get started.
 
-## Build
+## Tech Stack
 
-```bash
-npm run build
-```
+| Library / Tool | Role |
+|---|---|
+| [Three.js](https://threejs.org) | 3D rendering, loaders, OrbitControls |
+| [Vite](https://vitejs.dev) | Dev server and build tooling |
 
-Output goes to `dist/`. The built app is fully static — just serve the `dist/` folder.
+## Status
 
-## Usage
-
-1. Click **Load Model** to import a `.glb`, `.obj`, or `.fbx` file.
-2. Optionally load a **Texture Map** to override the model's diffuse.
-3. Adjust settings across the six panels: **Import / Render / Environment / Camera / Effects / Export**.
-4. Use the floating toolbar at the bottom of the viewport to switch between orbit and pan, frame the model, or toggle turntable rotation.
-5. Export a snapshot, video, or standalone HTML file from the **Export** panel.
-
-## Stack
-
-- [Three.js](https://threejs.org/) — scene, loaders, OrbitControls
-- [Vite](https://vitejs.dev/) — dev server and build
+`Prototype`. Built as part of ongoing exploration into browser-based creative tools. Feedback and issues welcome.
 
 ## License
 
-MIT
+[MIT](LICENSE)
+
+## Links
+
+- **Live Preview:** [link](#)
+- **More projects:** [rendyrayana.my.id](https://rendyrayana.my.id)
