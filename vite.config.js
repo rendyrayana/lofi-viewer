@@ -1,2 +1,5 @@
 import { defineConfig } from 'vite'
-export default defineConfig({ server: { port: 3000 } })
+export default defineConfig({
+  server: { port: 3000 },
+  base: '/lofi-viewer/',
+})
