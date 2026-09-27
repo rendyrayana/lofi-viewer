@@ -4,7 +4,7 @@
 
 https://github.com/user-attachments/assets/a7d788d3-29b8-494b-99d8-9cc5905b555e
 
-**[Live Preview](https://rendyrayana.github.io/lofi-viewer)** · **[Project Page](https://rendyrayana.my.id)** · [Rendy Rayana](https://rendyrayana.my.id)
+**[Live Preview](https://rendyrayana.github.io/lofi-viewer)** · **[Project Page](https://rendyrayana.my.id/lofi-viewer/)** · [Rendy Rayana](https://rendyrayana.my.id)
 
 ## Overview
 
@@ -56,6 +56,7 @@ Open `http://localhost:3000`. Drop in a model to get started.
 
 ## Links
 
+- **Project Page:** [rendyrayana.my.id/lofi-viewer](https://rendyrayana.my.id/lofi-viewer/)
 - **Live Preview:** [rendyrayana.github.io/lofi-viewer](https://rendyrayana.github.io/lofi-viewer)
 - **GitHub:** [github.com/rendyrayana/lofi-viewer](https://github.com/rendyrayana/lofi-viewer)
 - **More projects:** [rendyrayana.my.id](https://rendyrayana.my.id)
