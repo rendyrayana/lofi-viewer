@@ -2,6 +2,8 @@
 
 > Browser-based PSX/PS1-style 3D model viewer. Load any model, dial in the retro look, export.
 
+https://github.com/user-attachments/assets/a7d788d3-29b8-494b-99d8-9cc5905b555e
+
 **[Live Preview](#)** · **[Project Page](#)** · [Rendy Rayana](https://rendyrayana.my.id)
 
 ## Overview
