@@ -5,8 +5,8 @@ export function buildTopbar(el) {
     <div class="topbar-logo">
       <div class="logo-mark" aria-hidden="true">
         <span class="lit"></span><span></span><span class="lit"></span>
-        <span></span><span class="lit"></span><span></span>
         <span class="lit"></span><span></span><span class="lit"></span>
+        <span></span><span class="lit"></span><span></span>
       </div>
       <div class="topbar-wordmark">
         <h1>lofi-viewer</h1>
