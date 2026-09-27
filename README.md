@@ -4,18 +4,11 @@
 
 https://github.com/user-attachments/assets/a7d788d3-29b8-494b-99d8-9cc5905b555e
 
-**[Live Preview](#)** · **[Project Page](#)** · [Rendy Rayana](https://rendyrayana.my.id)
+**[Live Preview](https://rendyrayana.github.io/lofi-viewer)** · **[Project Page](https://rendyrayana.my.id)** · [Rendy Rayana](https://rendyrayana.my.id)
 
 ## Overview
 
 lofi-viewer is a browser-based tool that loads arbitrary 3D models and renders them through a PS1-style pipeline — low internal resolution, vertex snapping, affine texture warping, dithered 15-bit color, and optional CRT post-effects. It covers the full workflow from import to export: tweak the look in the editor, then save a standalone HTML viewer or record a turntable video.
-
-## Screenshots
-
-| | |
-|---|---|
-| ![](docs/screenshot-1.png) | ![](docs/screenshot-2.png) |
-| *PSX render pipeline* | *CRT effects + bloom* |
 
 ## Features
 
@@ -63,5 +56,6 @@ Open `http://localhost:3000`. Drop in a model to get started.
 
 ## Links
 
-- **Live Preview:** [link](#)
+- **Live Preview:** [rendyrayana.github.io/lofi-viewer](https://rendyrayana.github.io/lofi-viewer)
+- **GitHub:** [github.com/rendyrayana/lofi-viewer](https://github.com/rendyrayana/lofi-viewer)
 - **More projects:** [rendyrayana.my.id](https://rendyrayana.my.id)
