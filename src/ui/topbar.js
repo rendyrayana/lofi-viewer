@@ -26,10 +26,9 @@ export function buildTopbar(el) {
         </svg>
       </button>
       <a class="icon-btn" href="https://rendyrayana.my.id/lofi-viewer/" target="_blank" rel="noopener" aria-label="Project page" title="Project page">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="7" cy="7" r="5.5"/>
-          <path d="M7 1.5c-2 0-3.5 2.5-3.5 5.5s1.5 5.5 3.5 5.5 3.5-2.5 3.5-5.5S9 1.5 7 1.5Z"/>
-          <path d="M1.5 7h11"/>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 6.5L7 1l6 5.5"/>
+          <path d="M2.5 5.5V13h3.5V9.5h2V13h3.5V5.5"/>
         </svg>
       </a>
       <a class="icon-btn" href="https://github.com/rendyrayana/lofi-viewer" target="_blank" rel="noopener" aria-label="GitHub repo" title="GitHub">
