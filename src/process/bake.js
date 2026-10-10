@@ -33,13 +33,21 @@ export function prepareSource(geometry) {
   if (geometry.index) geo.setIndex(geometry.index.clone());
   else geo.setIndex([...Array(geometry.attributes.position.count).keys()]);
   const bvh = new MeshBVH(geo);
-  return { geo, bvh };
+  geo.computeBoundingBox();
+  const diag = geo.boundingBox.getSize(new THREE.Vector3()).length();
+  return { geo, bvh, diag };
 }
 
-// For every texel covered by the low-poly atlas, find the closest point on the
-// original scan and copy the original texture colour found there.
-export function bake(low, source, sampler, size) {
-  const { geo, bvh } = source;
+// For every texel covered by the low-poly atlas, project onto the original scan
+// along the low-poly face normal (both directions, within a cage of `cage` ×
+// model size) and copy the texture colour found there. Rays that miss — e.g.
+// over holes in the scan — fall back to the closest surface point.
+export function bake(low, source, sampler, size, { cage = 0.03 } = {}) {
+  const { geo, bvh, diag } = source;
+  const maxDist = diag * cage;
+  const ray = new THREE.Ray();
+  const faceN = new THREE.Vector3();
+  let rayHits = 0, samples = 0;
   const idx = geo.index.array, pos = geo.attributes.position, uvA = geo.attributes.uv;
   const px = new Uint8ClampedArray(size * size * 4);
   const filled = new Uint8Array(size * size);
@@ -56,8 +64,22 @@ export function bake(low, source, sampler, size) {
       lam0 * p[o + 1] + lam1 * p[o + 4] + lam2 * p[o + 7],
       lam0 * p[o + 2] + lam1 * p[o + 5] + lam2 * p[o + 8],
     );
-    bvh.closestPointToPoint(P, hit);
-    const f = hit.faceIndex * 3;
+    let face = -1;
+    ray.origin.copy(P); ray.direction.copy(faceN);
+    const fwd = bvh.raycastFirst(ray, THREE.DoubleSide, 0, maxDist);
+    ray.direction.negate();
+    const back = bvh.raycastFirst(ray, THREE.DoubleSide, 0, maxDist);
+    const best = fwd && back ? (fwd.distance <= back.distance ? fwd : back) : (fwd || back);
+    samples++;
+    if (best) {
+      rayHits++;
+      face = best.faceIndex;
+      hit.point.copy(best.point);
+    } else {
+      bvh.closestPointToPoint(P, hit);
+      face = hit.faceIndex;
+    }
+    const f = face * 3;
     A.fromBufferAttribute(pos, idx[f]); B.fromBufferAttribute(pos, idx[f + 1]); C.fromBufferAttribute(pos, idx[f + 2]);
     tri.set(A, B, C).getBarycoord(hit.point, bary);
     const i0 = idx[f], i1 = idx[f + 1], i2 = idx[f + 2];
@@ -70,6 +92,12 @@ export function bake(low, source, sampler, size) {
   };
 
   for (let t = 0; t < low.triCount; t++) {
+    const p = low.position, q = t * 9;
+    faceN.set(
+      (p[q + 4] - p[q + 1]) * (p[q + 8] - p[q + 2]) - (p[q + 5] - p[q + 2]) * (p[q + 7] - p[q + 1]),
+      (p[q + 5] - p[q + 2]) * (p[q + 6] - p[q])     - (p[q + 3] - p[q])     * (p[q + 8] - p[q + 2]),
+      (p[q + 3] - p[q])     * (p[q + 7] - p[q + 1]) - (p[q + 4] - p[q + 1]) * (p[q + 6] - p[q]),
+    ).normalize();
     const uv = low.uv, o = t * 6;
     const x0 = uv[o] * size, y0 = uv[o + 1] * size;
     const x1 = uv[o + 2] * size, y1 = uv[o + 3] * size;
@@ -104,7 +132,7 @@ export function bake(low, source, sampler, size) {
   let covered = 0;
   for (let i = 0; i < filled.length; i++) covered += filled[i];
   dilate(px, filled, size, size, Math.max(2, Math.ceil(size / 32)));
-  return { data: px, width: size, height: size, coverage: covered / (size * size) };
+  return { data: px, width: size, height: size, coverage: covered / (size * size), rayHitRate: samples ? rayHits / samples : 1 };
 }
 
 // Grows chart colours into the padding so nearest sampling at chart edges
