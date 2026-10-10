@@ -1,6 +1,6 @@
 import { store } from '../../store.js';
 
-const TABS = ['import', 'render', 'environment', 'camera', 'effects', 'export'];
+const TABS = ['import', 'process', 'render', 'environment', 'camera', 'effects', 'export'];
 
 export function buildTabs(stripEl, onSelect) {
   stripEl.innerHTML = TABS.map(t => `

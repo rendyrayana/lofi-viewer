@@ -5,6 +5,20 @@ const defaults = {
   filesize: null,
   tris: 0,
   fps: 0,
+  // Process
+  procDecimate: false,
+  procTargetTris: 1000,
+  procFlat: true,
+  procTexSize: 'original',
+  procTexFilter: 'nearest',
+  procPalette: 'off',
+  procPreset: 'bambuBasic',
+  procColors: 8,
+  procCustom: ['#000000', '#ffffff', '#c12e1f', '#0a2989'],
+  procDither: true,
+  procDitherStrength: 1.0,
+  procStats: null,
+  procBusy: false,
   // Render
   renderScale: 0.25,
   vertexSnap: false,
@@ -52,6 +66,7 @@ const defaults = {
 export { defaults };
 
 export const PANEL_KEYS = {
+  process: ['procDecimate','procTargetTris','procFlat','procTexSize','procTexFilter','procPalette','procPreset','procColors','procCustom','procDither','procDitherStrength'],
   render: ['renderScale','vertexSnap','snapPrecision','colorDepth','ditherPattern','affineWarp','textureFilter','wireframe','backfaceCulling','showGrid'],
   environment: ['bgType','bgColor','bgGradientColor','ambientIntensity','keyLightIntensity','lightColor','exposure','fogDensity','fogColor'],
   effects: ['crtCurvature','scanlines','scanlineOpacity','vignette','chromaticAberration','filmGrain','colorGrade','bloom','bloomIntensity'],

@@ -8,13 +8,15 @@ import { buildTopbar } from './ui/topbar.js';
 import { buildTabs } from './ui/sidebar/tabs.js';
 import { buildImportPanel } from './ui/sidebar/importPanel.js';
 import { buildRenderPanel } from './ui/sidebar/renderPanel.js';
+import { buildProcessPanel } from './ui/sidebar/processPanel.js';
+import { ModelProcessor } from './process/processor.js';
 import { buildEnvironmentPanel } from './ui/sidebar/environmentPanel.js';
 import { buildCameraPanel } from './ui/sidebar/cameraPanel.js';
 import { buildEffectsPanel } from './ui/sidebar/effectsPanel.js';
 import { buildExportPanel } from './ui/sidebar/exportPanel.js';
 import { loadPresetFromURL, PRESETS, getPresetData } from './export/preset.js';
 import { saveViewerHtml } from './export/saveHtml.js';
-import { defaults } from './store.js';
+import { defaults, PANEL_KEYS } from './store.js';
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 initTheme();
@@ -45,6 +47,7 @@ let loadedModelFile = null;
 let loadedTexFile = null;
 let defaultCube = null;
 let _depthOnlyMat = null;
+const processor = new ModelProcessor();
 
 // Default cube so viewport has something to show immediately
 function addDefaultCube() {
@@ -57,24 +60,20 @@ function addDefaultCube() {
   pipeline.applyToScene();
   store.setMany({ tris: 12 });
   sc.frameObject(mesh); // center view on the cube
+  processor.attach(mesh);
 }
 addDefaultCube();
 
 // ── UI ────────────────────────────────────────────────────────────────────────
 buildTopbar(document.getElementById('topbar'));
 
-const panels = {
-  import: buildImportPanel,
-  render: buildRenderPanel,
-  environment: buildEnvironmentPanel,
-  camera: buildCameraPanel,
-  effects: buildEffectsPanel,
-  export: buildExportPanel,
-};
-
 const panelContent = document.getElementById('panel-content');
 
+let panelCleanup = null;
+
 function showPanel(tab) {
+  panelCleanup?.();
+  panelCleanup = null;
   panelContent.innerHTML = '';
   const div = document.createElement('div');
   panelContent.appendChild(div);
@@ -86,6 +85,8 @@ function showPanel(tab) {
       onLoadHDRI: handleLoadHDRI,
       onClearScene: handleClearScene,
     });
+  } else if (tab === 'process') {
+    panelCleanup = buildProcessPanel(div, { onReset: () => showPanel('process') });
   } else if (tab === 'render') {
     buildRenderPanel(div, { onReset: () => showPanel('render') });
   } else if (tab === 'environment') {
@@ -214,6 +215,7 @@ async function handleLoadModel(file) {
     loadedModel = obj;
     sc.scene.add(obj);
     pipeline.applyToScene();
+    processor.attach(obj);
 
     const tris = countTris(obj);
     store.setMany({
@@ -223,6 +225,7 @@ async function handleLoadModel(file) {
     });
 
     if (store.get('autoFrame')) sc.frameObject(obj);
+    await runProcess();
   } catch (e) {
     console.error('Load error:', e);
     alert(`Failed to load model: ${e.message}`);
@@ -239,6 +242,8 @@ async function handleLoadTexture(file) {
       child.material.uniforms.uHasMap.value = true;
     }
   });
+  processor.setSourceMap(tex);
+  scheduleProcess();
 }
 
 async function handleLoadHDRI(file) {
@@ -255,12 +260,57 @@ function handleClearScene(resetStore = true) {
     });
     loadedModel = null;
   }
+  processor.detach();
   pipeline.psxMaterials.forEach(m => m.dispose());
   pipeline.psxMaterials = [];
   pipeline.psxMeshes = [];
   loadedTexFile = null;
-  if (resetStore) store.setMany({ filename: null, filesize: null, tris: 0 });
+  if (resetStore) store.setMany({ filename: null, filesize: null, tris: 0, procStats: null });
 }
+
+// ── Process (decimate → rebake/downsample → palette) ──────────────────────────
+let procTimer = null, procRunning = false, procQueued = false;
+
+function scheduleProcess() {
+  clearTimeout(procTimer);
+  procTimer = setTimeout(runProcess, 60);
+}
+
+async function runProcess() {
+  if (!processor.hasModel) { store.set('procStats', null); return; }
+  if (procRunning) { procQueued = true; return; }
+  procRunning = true;
+  store.set('procBusy', true);
+  // Let the "Processing…" status paint before the synchronous heavy work.
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    const s = store.state;
+    const stats = await processor.run({
+      decimate: s.procDecimate,
+      targetTris: s.procTargetTris,
+      flat: s.procFlat,
+      texSize: s.procTexSize,
+      texFilter: s.procTexFilter,
+      palette: s.procPalette,
+      preset: s.procPreset,
+      colors: s.procColors,
+      custom: s.procCustom,
+      dither: s.procDither,
+      ditherStrength: s.procDitherStrength,
+    });
+    pipeline.rebuildWireframeOverlay();
+    store.setMany({ tris: stats.tris, procStats: stats });
+  } catch (e) {
+    console.error('Process error:', e);
+    alert(`Processing failed: ${e.message}`);
+  } finally {
+    procRunning = false;
+    store.set('procBusy', false);
+    if (procQueued) { procQueued = false; runProcess(); }
+  }
+}
+
+PANEL_KEYS.process.forEach(k => store.subscribe(k, scheduleProcess));
 
 // ── Env / background ──────────────────────────────────────────────────────────
 let bgImageTex = null;
@@ -345,7 +395,8 @@ hudTris.textContent = '  ' + store.get('tris').toLocaleString();
 let lastTime = performance.now(), frameCount = 0, fpsTimer = 0;
 
 function animate(time) {
-  requestAnimationFrame(animate);
+  runProcess();
+requestAnimationFrame(animate);
   // Clamp to 100ms max so a tab coming back from sleep doesn't spin wildly.
   const delta = Math.min((time - lastTime) / 1000, 0.1);
   lastTime = time;
@@ -465,4 +516,5 @@ store.subscribe('aspectRatio', applyAspectRatio);
 const initSz = pipeline.getRTSize();
 hudRes.textContent = `  ${initSz.w}×${initSz.h}`;
 
+runProcess();
 requestAnimationFrame(animate);

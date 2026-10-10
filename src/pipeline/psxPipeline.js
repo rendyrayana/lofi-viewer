@@ -257,10 +257,10 @@ export class PSXPipeline {
       this.psxMeshes.push(obj);
     });
 
-    this._rebuildWireframeOverlay();
+    this.rebuildWireframeOverlay();
   }
 
-  _rebuildWireframeOverlay() {
+  rebuildWireframeOverlay() {
     while (this.wireframeScene.children.length > 0) {
       const obj = this.wireframeScene.children[0];
       obj.geometry.dispose();
@@ -322,9 +322,10 @@ export class PSXPipeline {
 
     const filter = state.textureFilter === 'nearest' ? THREE.NearestFilter : THREE.LinearFilter;
     this.psxMaterials.forEach(m => {
-      if (m.uniforms.map.value) {
-        m.uniforms.map.value.magFilter = m.uniforms.map.value.minFilter = filter;
-        m.uniforms.map.value.needsUpdate = true;
+      const tex = m.uniforms.map.value;
+      if (tex && (tex.magFilter !== filter || tex.minFilter !== filter)) {
+        tex.magFilter = tex.minFilter = filter;
+        tex.needsUpdate = true;
       }
       m.side = state.backfaceCulling ? THREE.FrontSide : THREE.DoubleSide;
     });
