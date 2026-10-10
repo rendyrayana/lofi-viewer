@@ -8,13 +8,9 @@ export function buildPipelineBar(el) {
   el.innerHTML = `
     <ol class="pipe-stages">
       <li><button class="pipe-stage" data-tab="import"><span class="pipe-name">Scan</span><span class="pipe-val" id="pv-scan"></span></button></li>
-      <li aria-hidden="true" class="pipe-arrow">→</li>
       <li><button class="pipe-stage" data-tab="process"><span class="pipe-name">Decimate</span><span class="pipe-val" id="pv-dec"></span></button></li>
-      <li aria-hidden="true" class="pipe-arrow">→</li>
       <li><button class="pipe-stage" data-tab="process"><span class="pipe-name">Texture</span><span class="pipe-val" id="pv-tex"></span></button></li>
-      <li aria-hidden="true" class="pipe-arrow">→</li>
       <li><button class="pipe-stage" data-tab="process"><span class="pipe-name">Palette</span><span class="pipe-val" id="pv-pal"></span></button></li>
-      <li aria-hidden="true" class="pipe-arrow">→</li>
       <li><button class="pipe-stage" data-tab="look"><span class="pipe-name">Look</span><span class="pipe-val" id="pv-look"></span></button></li>
     </ol>
     <div class="pipe-status" id="pipe-status" role="status" aria-live="polite"></div>

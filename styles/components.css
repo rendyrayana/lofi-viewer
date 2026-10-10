@@ -593,20 +593,19 @@ input[type="number"]:focus { outline: 1px solid var(--c-text-dim); }
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  min-height: 38px;
+  min-height: 32px;
   background: var(--c-panel);
   border-bottom: 1px solid var(--c-border);
   overflow-x: auto;
   scrollbar-width: none;
 }
 #pipeline-bar::-webkit-scrollbar { display: none; }
-.pipe-stages { display: flex; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; flex-shrink: 0; }
-.pipe-arrow { color: var(--c-text-faint); font-size: 11px; padding: 0 2px; }
+.pipe-stages { display: flex; align-items: center; gap: 6px; list-style: none; margin: 0; padding: 0; flex-shrink: 0; }
 .pipe-stage {
   display: flex; align-items: baseline; gap: 6px;
-  padding: 4px 8px;
+  padding: 2px 8px;
   border: 1px solid var(--c-border);
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   color: var(--c-text);
   cursor: pointer;
