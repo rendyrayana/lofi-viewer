@@ -75,6 +75,14 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
             </div>
           </div>
           <div class="panel-row">
+            <label for="sel-colordetail">Color detail<small class="proc-hint">Splits faces for coloring only — shape stays low-poly</small></label>
+            <div class="row-right">
+              <select id="sel-colordetail">
+                ${[[0, '1 color per face'], [1, '4× finer'], [2, '16× finer'], [3, '64× finer']].map(([n, l]) => `<option value="${n}" ${s.printColorDetail === n ? 'selected' : ''}>${l}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="panel-row">
             <label for="sel-minisland">Merge color specks<small class="proc-hint">Recolor patches smaller than N faces</small></label>
             <div class="row-right">
               <select id="sel-minisland">
@@ -149,6 +157,7 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
     store.set('printHeight', v);
   });
   el.querySelector('#sel-filaments').addEventListener('change', e => store.set('printFilaments', parseInt(e.target.value, 10)));
+  el.querySelector('#sel-colordetail').addEventListener('change', e => store.set('printColorDetail', parseInt(e.target.value, 10)));
   el.querySelector('#sel-minisland').addEventListener('change', e => store.set('printMinIsland', parseInt(e.target.value, 10)));
   el.querySelector('#sw-closeholes').addEventListener('change', e => store.set('printCloseHoles', e.target.checked));
   el.querySelector('#btn-3mf').addEventListener('click', () => {

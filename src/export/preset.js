@@ -149,7 +149,7 @@ export const PROCESS_TARGETS = {
   dos:       { label: 'DOS',       settings: { procDecimate: true, procTargetTris: 300,  procTexSize: '128x64', procTexMode: 'fixed', procPalette: 'extract', procColors: 32, procDither: false } },
   gameboy:   { label: 'Game Boy',  settings: { procDecimate: true, procTargetTris: 300,  procTexSize: '32',  procTexMode: 'fixed', procPalette: 'preset', procPreset: 'gameboy', procDither: true } },
   pico8:     { label: 'PICO-8',    settings: { procDecimate: true, procTargetTris: 300,  procTexSize: '32',  procTexMode: 'fixed', procPalette: 'preset', procPreset: 'pico8', procDither: true } },
-  print:     { label: '3D print',  settings: { procDecimate: true, procTargetTris: 1500, procTexSize: '128', procTexMode: 'fixed', procPalette: 'preset', procPreset: 'bambuBasic', procDither: false } },
+  print:     { label: '3D print',  settings: { procDecimate: true, procTargetTris: 3000, procTexSize: '256', procTexMode: 'fixed', procTexFilter: 'edge', procSaturation: 1.3, procContrast: 1.15, procPalette: 'extract', procColors: 8, procDither: false } },
 };
 
 const LOOK_KEYS = [
@@ -175,8 +175,9 @@ export function applyTarget(name) {
   const extra = {};
   if (t.settings.procTexSize) extra.procTexLast = t.settings.procTexSize;
   if (t.settings.procPalette) extra.procPaletteLast = t.settings.procPalette;
+  const base = Object.fromEntries(TARGET_KEYS.map(k => [k, defaults[k]]));
   applying = true;
-  try { store.setMany({ ...t.settings, ...extra, procTarget: name }); } finally { applying = false; }
+  try { store.setMany({ ...base, ...t.settings, ...extra, procTarget: name }); } finally { applying = false; }
 }
 
 // Manual changes turn the matching selector back to "custom".

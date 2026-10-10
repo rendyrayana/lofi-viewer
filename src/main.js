@@ -469,8 +469,8 @@ function handleExport3mf() {
   if (!processor.hasModel) return 'Load a model first.';
   if (store.get('procBusy')) return 'Still processing — try again in a moment.';
   const s = store.state;
-  if (s.tris > 300000 && !confirm(`This mesh has ${s.tris.toLocaleString()} triangles. Decimating first is recommended. Export anyway?`)) return '';
-  const parts = collectFaces(processor);
+  if (s.tris * 4 ** s.printColorDetail > 600000 && !confirm(`The print file will have ${(s.tris * 4 ** s.printColorDetail).toLocaleString()} triangles. Decimate first or lower Color detail? Export anyway?`)) return '';
+  const parts = collectFaces(processor, { subdiv: s.printColorDetail });
   const fixed = ['preset', 'extract', 'custom'].includes(s.procPalette) ? processor.palette : null;
   const slots = assignFilaments(parts, fixed, s.printFilaments);
   const { bytes, stats } = build3mf(parts, slots, { heightMm: s.printHeight, name: exportBaseName(), minIsland: s.printMinIsland, closeHoles: s.printCloseHoles });

@@ -10,48 +10,75 @@ const SAMPLES = [
 ];
 
 // Collects every processed mesh as world-space triangles plus one RGB colour
-// per face, read from the final (palette-quantised) texture.
-export function collectFaces(processor) {
+// per face, read from the final (palette-quantised) texture. `subdiv` splits
+// each triangle into 4^subdiv flat sub-triangles first: the shape is
+// unchanged, but colour can follow texture detail finer than the mesh.
+export function collectFaces(processor, { subdiv = 0 } = {}) {
   const parts = [];
   for (const e of processor.entries) {
     const { mesh } = e;
     mesh.updateWorldMatrix(true, false);
     const geo = mesh.geometry;
-    const pos = geo.attributes.position, uv = geo.attributes.uv;
+    const pos = geo.attributes.position, uvA = geo.attributes.uv;
     const idx = geo.index ? geo.index.array : null;
     const nT = (idx ? idx.length : pos.count) / 3;
     const corner = (t, c) => (idx ? idx[t * 3 + c] : t * 3 + c);
-
-    const v = new THREE.Vector3();
-    const positions = new Float32Array(nT * 9);
-    for (let t = 0; t < nT; t++) for (let c = 0; c < 3; c++) {
-      v.fromBufferAttribute(pos, corner(t, c)).applyMatrix4(mesh.matrixWorld);
-      positions.set([v.x, v.y, v.z], (t * 3 + c) * 3);
-    }
-
-    const colors = new Array(nT);
     const img = e.image;
     const diffuse = mesh.material.uniforms?.diffuse?.value;
     const fallback = diffuse ? [diffuse.r * 255, diffuse.g * 255, diffuse.b * 255].map(Math.round) : [200, 200, 200];
+
+    const k = 4 ** subdiv;
+    const positions = new Float32Array(nT * k * 9);
+    const colors = new Array(nT * k);
+    const v = new THREE.Vector3();
+    let out = 0;
+
+    const emit = (p, uv) => {
+      positions.set(p, out * 9);
+      colors[out++] = img && uvA ? faceColor(img, uv) : fallback;
+    };
+    const split = (p, uv, level) => {
+      if (level === 0) { emit(p, uv); return; }
+      const mp = (a, b) => [(p[a * 3] + p[b * 3]) / 2, (p[a * 3 + 1] + p[b * 3 + 1]) / 2, (p[a * 3 + 2] + p[b * 3 + 2]) / 2];
+      const mu = (a, b) => [(uv[a * 2] + uv[b * 2]) / 2, (uv[a * 2 + 1] + uv[b * 2 + 1]) / 2];
+      const P = i => p.slice(i * 3, i * 3 + 3), U = i => uv.slice(i * 2, i * 2 + 2);
+      const p01 = mp(0, 1), p12 = mp(1, 2), p20 = mp(2, 0);
+      const u01 = mu(0, 1), u12 = mu(1, 2), u20 = mu(2, 0);
+      split([...P(0), ...p01, ...p20], [...U(0), ...u01, ...u20], level - 1);
+      split([...p01, ...P(1), ...p12], [...u01, ...U(1), ...u12], level - 1);
+      split([...p20, ...p12, ...P(2)], [...u20, ...u12, ...U(2)], level - 1);
+      split([...p01, ...p12, ...p20], [...u01, ...u12, ...u20], level - 1);
+    };
+
     for (let t = 0; t < nT; t++) {
-      if (!img || !uv) { colors[t] = fallback; continue; }
-      const votes = new Map();
-      for (const [a, b, c] of SAMPLES) {
-        const i0 = corner(t, 0), i1 = corner(t, 1), i2 = corner(t, 2);
-        const u = a * uv.getX(i0) + b * uv.getX(i1) + c * uv.getX(i2);
-        const w = a * uv.getY(i0) + b * uv.getY(i1) + c * uv.getY(i2);
-        const rgb = texel(img, u, w);
-        const key = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
-        const cur = votes.get(key);
-        if (cur) cur.n++; else votes.set(key, { rgb, n: 1 });
+      const p = [], uv = [];
+      for (let c = 0; c < 3; c++) {
+        const i = corner(t, c);
+        v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+        p.push(v.x, v.y, v.z);
+        uv.push(uvA ? uvA.getX(i) : 0, uvA ? uvA.getY(i) : 0);
       }
-      let best = null;
-      for (const vote of votes.values()) if (!best || vote.n > best.n) best = vote;
-      colors[t] = best.rgb;
+      split(p, uv, subdiv);
     }
     parts.push({ name: mesh.name || 'part', positions, colors });
   }
   return parts;
+}
+
+// Majority vote over a few points inside the triangle, so a single dither
+// texel doesn't decide the face colour.
+function faceColor(img, uv) {
+  const votes = new Map();
+  let best = null;
+  for (const [a, b, c] of SAMPLES) {
+    const rgb = texel(img, a * uv[0] + b * uv[2] + c * uv[4], a * uv[1] + b * uv[3] + c * uv[5]);
+    const key = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+    const cur = votes.get(key) ?? { rgb, n: 0 };
+    cur.n++;
+    votes.set(key, cur);
+    if (!best || cur.n > best.n) best = cur;
+  }
+  return best.rgb;
 }
 
 function texel(img, u, v) {

@@ -78,6 +78,7 @@ const defaults = {
   printFilaments: 4,
   printMinIsland: 4,
   printCloseHoles: true,
+  printColorDetail: 2,
 };
 
 export { defaults };
