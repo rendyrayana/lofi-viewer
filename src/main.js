@@ -14,7 +14,7 @@ import { buildExportPanel } from './ui/sidebar/exportPanel.js';
 import { buildPipelineBar } from './ui/pipelineBar.js';
 import { loadPresetFromURL, getPresetData } from './export/preset.js';
 import { saveViewerHtml } from './export/saveHtml.js';
-import { collectFaces, assignFilaments, build3mf, download3mf } from './export/print3mf.js';
+import { collectFaces, assignFilaments, prepareMesh, build3mf, buildObjMtl, downloadFile } from './export/print3mf.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { defaults, PANEL_KEYS } from './store.js';
 
@@ -101,7 +101,7 @@ function showPanel(tab) {
     });
     panelContent.scrollTop = scroll;
   } else if (tab === 'export') {
-    buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExport3mf: handleExport3mf, onExportGlb: handleExportGlb });
+    buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExportPrint: handleExportPrint, onExportGlb: handleExportGlb });
   }
 }
 
@@ -497,7 +497,8 @@ function exportBaseName() {
   return (store.get('filename') || 'model').replace(/\.[^.]+$/, '');
 }
 
-async function handleExport3mf() {
+// format: '3mf' (Prusa/Orca/Bambu paint) or 'obj' (OBJ + MTL, Bambu colour matching)
+async function handleExportPrint(format = '3mf') {
   if (!processor.hasModel) return 'Load a model first.';
   clearTimeout(procTimer);
   if (procTimer || procRunning || procQueued) {
@@ -506,17 +507,29 @@ async function handleExport3mf() {
     await processingIdle();
   }
   const s = store.state;
-  if (s.tris * 4 ** s.printColorDetail > 600000 && !confirm(`The print file will have ${(s.tris * 4 ** s.printColorDetail).toLocaleString()} triangles. Decimate first or lower Color detail? Export anyway?`)) return '';
+  const faces = s.tris * 4 ** s.printColorDetail;
+  if (faces > 600000 && !confirm(`The print file will have ${faces.toLocaleString()} triangles. Decimate first or lower Color detail? Export anyway?`)) return '';
   const parts = collectFaces(processor, { subdiv: s.printColorDetail });
-  const fixed = ['preset', 'extract', 'custom'].includes(s.procPalette) ? processor.palette : null;
+  const fixed = ['preset', 'extract', 'custom', 'clut4', 'clut8'].includes(s.procPalette) ? processor.palette : null;
   const slots = assignFilaments(parts, fixed, s.printFilaments);
-  const { bytes, stats } = build3mf(parts, slots, { heightMm: s.printHeight, name: exportBaseName(), minIsland: s.printMinIsland, closeHoles: s.printCloseHoles });
-  download3mf(bytes, `${exportBaseName()}-lofi.3mf`);
-  const lines = [`${stats.triangles.toLocaleString()} tris · ${stats.filaments} filaments · ${stats.sizeMm.map(v => v.toFixed(0)).join('×')} mm`];
-  if (stats.holesClosed) lines.push(`Closed ${stats.holesClosed} hole${stats.holesClosed > 1 ? 's' : ''}`);
-  if (stats.islandsMerged) lines.push(`Merged ${stats.islandsMerged} color specks (${stats.facesRecolored} faces)`);
-  if (stats.openEdges || stats.nonManifoldEdges) {
-    lines.push(`Warning: not watertight — ${stats.openEdges} open, ${stats.nonManifoldEdges} non-manifold edges. The slicer may need to repair it.`);
+  const prepared = prepareMesh(parts, { heightMm: s.printHeight, minIsland: s.printMinIsland, closeHoles: s.printCloseHoles });
+  const name = exportBaseName();
+  if (format === 'obj') {
+    const { obj, mtl, base } = buildObjMtl(prepared, slots, { name });
+    downloadFile(obj, `${base}.obj`, 'text/plain');
+    // A short gap lets the browser treat the second file as its own download.
+    await new Promise(r => setTimeout(r, 400));
+    downloadFile(mtl, `${base}.mtl`, 'text/plain');
+  } else {
+    downloadFile(build3mf(prepared, slots, { name }), `${name}-lofi.3mf`, 'model/3mf');
+  }
+  const st = prepared.stats;
+  const lines = [`${st.triangles.toLocaleString()} tris · ${slots.length} filaments · ${st.sizeMm.map(v => v.toFixed(0)).join('×')} mm`];
+  if (format === 'obj') lines.push('Keep the .obj and .mtl together, then open the .obj in Bambu Studio.');
+  if (st.holesClosed) lines.push(`Closed ${st.holesClosed} hole${st.holesClosed > 1 ? 's' : ''}`);
+  if (st.islandsMerged) lines.push(`Merged ${st.islandsMerged} color specks (${st.facesRecolored} faces)`);
+  if (st.openEdges || st.nonManifoldEdges) {
+    lines.push(`Warning: not watertight — ${st.openEdges} open, ${st.nonManifoldEdges} non-manifold edges. The slicer may need to repair it.`);
   } else {
     lines.push('Watertight ✓');
   }

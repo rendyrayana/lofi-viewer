@@ -3,7 +3,7 @@ import { takeSnapshot } from '../../export/snapshot.js';
 import { recordTurntable, recordTurntableLoop } from '../../export/record.js';
 import { shareLink } from '../../export/preset.js';
 
-export function buildExportPanel(el, getRenderer, getPipeline = null, getControls = null, onEnterViewer = null, onSaveHtml = null, { onExport3mf = null, onExportGlb = null } = {}) {
+export function buildExportPanel(el, getRenderer, getPipeline = null, getControls = null, onEnterViewer = null, onSaveHtml = null, { onExportPrint = null, onExportGlb = null } = {}) {
   const s = store.state;
 
   el.innerHTML = `
@@ -58,7 +58,7 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
       </section>
 
       <section class="card">
-        <header class="card-head"><h3 class="card-title">3D print</h3><p class="card-hint">Multi-color 3MF for Bambu Studio, Orca, PrusaSlicer</p></header>
+        <header class="card-head"><h3 class="card-title">3D print</h3><p class="card-hint">Multi-color files for Bambu Studio, Orca, PrusaSlicer</p></header>
         <div class="card-body">
           <div class="panel-row">
             <label for="inp-printheight">Print height (mm)</label>
@@ -67,7 +67,7 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
             </div>
           </div>
           <div class="panel-row">
-            <label for="sel-filaments">Filaments<small class="proc-hint">Used when the Process palette is skipped or 15-bit</small></label>
+            <label for="sel-filaments">Filaments<small class="proc-hint">Used when the Process palette is skipped, 15-bit, or has more than 16 colors</small></label>
             <div class="row-right">
               <select id="sel-filaments">
                 ${[2, 3, 4, 5, 6, 8, 12, 16].map(n => `<option value="${n}" ${s.printFilaments === n ? 'selected' : ''}>${n}</option>`).join('')}
@@ -99,7 +99,8 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
               </label>
             </div>
           </div>
-          <button class="btn btn-primary" id="btn-3mf">Export 3MF</button>
+          <button class="btn btn-primary" id="btn-obj-print">Export for Bambu Studio (OBJ + MTL)</button>
+          <button class="btn btn-ghost" id="btn-3mf">Export 3MF (Orca / PrusaSlicer)</button>
           <div class="proc-status" id="print-status" aria-live="polite"></div>
         </div>
       </section>
@@ -160,19 +161,22 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
   el.querySelector('#sel-colordetail').addEventListener('change', e => store.set('printColorDetail', parseInt(e.target.value, 10)));
   el.querySelector('#sel-minisland').addEventListener('change', e => store.set('printMinIsland', parseInt(e.target.value, 10)));
   el.querySelector('#sw-closeholes').addEventListener('change', e => store.set('printCloseHoles', e.target.checked));
-  el.querySelector('#btn-3mf').addEventListener('click', async () => {
-    const btn = el.querySelector('#btn-3mf'), status = el.querySelector('#print-status');
-    btn.disabled = true;
+  const runPrintExport = async (format, btn) => {
+    const status = el.querySelector('#print-status');
+    const buttons = el.querySelectorAll('#btn-3mf, #btn-obj-print');
+    buttons.forEach(b => { b.disabled = true; });
     status.textContent = store.get('procBusy') ? 'Waiting for processing to finish…' : 'Exporting…';
     try {
-      status.textContent = (await onExport3mf?.()) || '';
+      status.textContent = (await onExportPrint?.(format)) || '';
     } catch (e) {
-      console.error('3MF export failed:', e);
+      console.error('Print export failed:', e);
       status.textContent = `Export failed: ${e.message}`;
     } finally {
-      btn.disabled = false;
+      buttons.forEach(b => { b.disabled = false; });
     }
-  });
+  };
+  el.querySelector('#btn-obj-print').addEventListener('click', () => runPrintExport('obj'));
+  el.querySelector('#btn-3mf').addEventListener('click', () => runPrintExport('3mf'));
   el.querySelector('#btn-glb').addEventListener('click', () => onExportGlb?.());
   el.querySelector('#btn-save-html').addEventListener('click', () => onSaveHtml?.());
   el.querySelector('#btn-viewer').addEventListener('click', () => onEnterViewer?.());

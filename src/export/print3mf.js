@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { zipSync, strToU8 } from 'fflate';
 import { extractPalette, hexToRgb, rgbToHex } from '../process/palette.js';
 
+const MAX_PALETTE_FILAMENTS = 16;
+
 // Barycentric sample points per triangle for the face-colour majority vote.
 const SAMPLES = [
   [1 / 3, 1 / 3, 1 / 3],
@@ -93,13 +95,16 @@ function texel(img, u, v) {
 // colour becomes one filament; otherwise the face colours are reduced to
 // `maxFilaments` representative colours.
 export function assignFilaments(parts, palette, maxFilaments) {
-  let slots;
+  let slots = null;
   if (palette?.length) {
     const used = new Set();
     for (const p of parts) for (const c of p.colors) used.add(rgbToHex(c));
     slots = palette.filter(h => used.has(h));
-    if (!slots.length) slots = palette.slice(0, maxFilaments);
-  } else {
+    // Palettes beyond a realistic multi-AMS setup (e.g. a 256-entry CLUT)
+    // are reduced to the Filaments setting instead.
+    if (!slots.length || slots.length > MAX_PALETTE_FILAMENTS) slots = null;
+  }
+  if (!slots) {
     const all = [];
     for (const p of parts) for (const c of p.colors) all.push(c[0], c[1], c[2], 255);
     slots = extractPalette({ data: all }, maxFilaments);
@@ -135,8 +140,9 @@ export function paintCode(state) {
   return (state - 3).toString(16).toUpperCase() + 'C';
 }
 
-// Builds a single-file 3MF (Y-up scene → Z-up, millimetres, resting on z = 0).
-export function build3mf(parts, slots, { heightMm = 60, name = 'lofi-viewer', minIsland = 0, closeHoles = true } = {}) {
+// Welds, closes holes, checks and cleans the coloured mesh, and converts it to
+// print space: Y-up scene → Z-up, millimetres, centred, resting on z = 0.
+export function prepareMesh(parts, { heightMm = 60, minIsland = 0, closeHoles = true } = {}) {
   const box = new THREE.Box3();
   const v = new THREE.Vector3();
   for (const p of parts) for (let i = 0; i < p.positions.length; i += 3) box.expandByPoint(v.fromArray(p.positions, i));
@@ -144,11 +150,8 @@ export function build3mf(parts, slots, { heightMm = 60, name = 'lofi-viewer', mi
   const center = box.getCenter(new THREE.Vector3());
   const k = size.y > 0 ? heightMm / size.y : 1;
 
-  const objects = [];
-  const items = [];
   const check = { openEdges: 0, nonManifoldEdges: 0, islandsMerged: 0, facesRecolored: 0, holesClosed: 0 };
-  let id = 2;
-  for (const p of parts) {
+  const meshes = parts.map(p => {
     const { verts, tris } = weld(p.positions, p.slot);
     if (closeHoles) check.holesClosed += fillHoles(verts, tris);
     const edges = edgeFaces(tris);
@@ -161,20 +164,36 @@ export function build3mf(parts, slots, { heightMm = 60, name = 'lofi-viewer', mi
       check.islandsMerged += r.islands;
       check.facesRecolored += r.faces;
     }
-    const vx = [];
+    const out = new Float64Array(verts.length);
     for (let i = 0; i < verts.length; i += 3) {
-      const x = (verts[i] - center.x) * k;
-      const y = -(verts[i + 2] - center.z) * k;
-      const z = (verts[i + 1] - box.min.y) * k;
-      vx.push(`<vertex x="${fmt(x)}" y="${fmt(y)}" z="${fmt(z)}"/>`);
+      out[i] = (verts[i] - center.x) * k;
+      out[i + 1] = -(verts[i + 2] - center.z) * k;
+      out[i + 2] = (verts[i + 1] - box.min.y) * k;
     }
+    return { name: p.name, verts: out, tris };
+  });
+  return {
+    meshes,
+    stats: { triangles: meshes.reduce((s, m) => s + m.tris.length / 4, 0), sizeMm: [size.x * k, size.z * k, size.y * k], ...check },
+  };
+}
+
+// Single-file 3MF with per-triangle filament paint (Bambu paint_color,
+// PrusaSlicer mmu_segmentation) and standard basematerials colours.
+export function build3mf(prepared, slots, { name = 'lofi-viewer' } = {}) {
+  const objects = [];
+  const items = [];
+  let id = 2;
+  for (const m of prepared.meshes) {
+    const vx = [];
+    for (let i = 0; i < m.verts.length; i += 3) vx.push(`<vertex x="${fmt(m.verts[i])}" y="${fmt(m.verts[i + 1])}" z="${fmt(m.verts[i + 2])}"/>`);
     const tx = [];
-    for (let t = 0; t < tris.length; t += 4) {
-      const code = paintCode(tris[t + 3] + 1);
-      tx.push(`<triangle v1="${tris[t]}" v2="${tris[t + 1]}" v3="${tris[t + 2]}" pid="1" p1="${tris[t + 3]}" paint_color="${code}" slic3rpe:mmu_segmentation="${code}"/>`);
+    for (let t = 0; t < m.tris.length; t += 4) {
+      const code = paintCode(m.tris[t + 3] + 1);
+      tx.push(`<triangle v1="${m.tris[t]}" v2="${m.tris[t + 1]}" v3="${m.tris[t + 2]}" pid="1" p1="${m.tris[t + 3]}" paint_color="${code}" slic3rpe:mmu_segmentation="${code}"/>`);
     }
     objects.push(
-      `<object id="${id}" type="model" pid="1" pindex="0" name="${xml(p.name)}"><mesh>` +
+      `<object id="${id}" type="model" pid="1" pindex="0" name="${xml(m.name)}"><mesh>` +
       `<vertices>${vx.join('')}</vertices><triangles>${tx.join('')}</triangles></mesh></object>`
     );
     items.push(`<item objectid="${id}"/>`);
@@ -203,10 +222,36 @@ export function build3mf(parts, slots, { heightMm = 60, name = 'lofi-viewer', mi
     ),
     '3D/3dmodel.model': strToU8(model),
   };
-  return {
-    bytes: zipSync(files, { level: 6 }),
-    stats: { filaments: slots.length, triangles: parts.reduce((s, p) => s + p.colors.length, 0), sizeMm: [size.x * k, size.z * k, size.y * k], ...check },
-  };
+  return zipSync(files, { level: 6 });
+}
+
+// OBJ + MTL with one material per filament. Bambu Studio imports this through
+// its colour-matching dialog (no "invalid config" warning), and most slicers
+// and 3D tools read material colours from MTL files.
+export function buildObjMtl(prepared, slots, { name = 'lofi-viewer' } = {}) {
+  const base = `${name.replace(/[^\w.-]+/g, '_')}-lofi`;
+  const mtl = slots.map((h, i) => {
+    const [r, g, b] = hexToRgb(h).map(c => (c / 255).toFixed(4));
+    return `newmtl filament_${i + 1}\nKd ${r} ${g} ${b}\n`;
+  }).join('\n');
+  const lines = [`# lofi-viewer multi-color print export`, `mtllib ${base}.mtl`];
+  let offset = 1;
+  for (const m of prepared.meshes) {
+    lines.push(`o ${m.name.replace(/\s+/g, '_') || 'part'}`);
+    for (let i = 0; i < m.verts.length; i += 3) lines.push(`v ${fmt(m.verts[i])} ${fmt(m.verts[i + 1])} ${fmt(m.verts[i + 2])}`);
+    const bySlot = new Map();
+    for (let t = 0; t < m.tris.length; t += 4) {
+      const list = bySlot.get(m.tris[t + 3]) ?? [];
+      list.push(`f ${m.tris[t] + offset} ${m.tris[t + 1] + offset} ${m.tris[t + 2] + offset}`);
+      bySlot.set(m.tris[t + 3], list);
+    }
+    for (const [slot, faces] of [...bySlot].sort((a, b) => a[0] - b[0])) {
+      lines.push(`usemtl filament_${slot + 1}`);
+      lines.push(...faces);
+    }
+    offset += m.verts.length / 3;
+  }
+  return { obj: lines.join('\n') + '\n', mtl, base };
 }
 
 // Merges coincident corners so the printed mesh is one connected solid.
@@ -342,8 +387,8 @@ function fillHoles(verts, tris) {
 const fmt = n => (Math.abs(n) < 1e-9 ? '0' : n.toFixed(4));
 const xml = s => String(s).replace(/[<>&"]/g, ch => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[ch]));
 
-export function download3mf(bytes, filename) {
-  const blob = new Blob([bytes], { type: 'model/3mf' });
+export function downloadFile(bytes, filename, type = 'application/octet-stream') {
+  const blob = new Blob([bytes], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
