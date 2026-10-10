@@ -260,27 +260,35 @@ export class PSXPipeline {
     this.rebuildWireframeOverlay();
   }
 
+  // Edge geometry is expensive on dense scans (~1.7 s for 500k triangles), so
+  // it is only built while the wireframe overlay is visible, and cached per
+  // geometry so switching between original and processed meshes is free.
   rebuildWireframeOverlay() {
-    while (this.wireframeScene.children.length > 0) {
-      const obj = this.wireframeScene.children[0];
-      obj.geometry.dispose();
-      this.wireframeScene.remove(obj);
+    this._wireDirty = true;
+  }
+
+  _syncWireframe() {
+    this._wireDirty = false;
+    this._edgeCache ??= new WeakMap();
+    this.wireframeScene.clear();
+    for (const mesh of this.psxMeshes) {
+      let edges = this._edgeCache.get(mesh.geometry);
+      if (!edges) {
+        edges = new THREE.EdgesGeometry(mesh.geometry);
+        this._edgeCache.set(mesh.geometry, edges);
+        mesh.geometry.addEventListener('dispose', () => edges.dispose());
+      }
+      this.wireframeScene.add(new THREE.LineSegments(edges, this.wireframeMat));
     }
-    this.psxMeshes.forEach(mesh => {
-      const edges = new THREE.EdgesGeometry(mesh.geometry);
-      const line = new THREE.LineSegments(edges, this.wireframeMat);
-      this.wireframeScene.add(line);
-    });
   }
 
   renderWireframeOverlay(camera) {
+    if (this._wireDirty || this.wireframeScene.children.length !== this.psxMeshes.length) this._syncWireframe();
     this.wireframeScene.children.forEach((line, i) => {
-      if (i < this.psxMeshes.length) {
-        this.psxMeshes[i].getWorldPosition(line.position);
-        this.psxMeshes[i].getWorldQuaternion(line.quaternion);
-        this.psxMeshes[i].getWorldScale(line.scale);
-        line.updateMatrix();
-      }
+      this.psxMeshes[i].getWorldPosition(line.position);
+      this.psxMeshes[i].getWorldQuaternion(line.quaternion);
+      this.psxMeshes[i].getWorldScale(line.scale);
+      line.updateMatrix();
     });
     this.renderer.render(this.wireframeScene, camera);
   }

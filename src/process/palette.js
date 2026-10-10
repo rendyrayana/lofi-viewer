@@ -219,9 +219,17 @@ function redmean(r, g, b, [pr, pg, pb]) {
   return (2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db;
 }
 
+// Counts distinct RGB colours with a 2^24-bit bitmap (fast for 4K textures).
+let seenBits = null;
 export function countColors(img) {
-  const set = new Set();
+  seenBits ??= new Uint32Array(1 << 19);
+  seenBits.fill(0);
   const { data } = img;
-  for (let i = 0; i < data.length; i += 4) set.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
-  return set.size;
+  let n = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const c = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+    const w = c >>> 5, b = 1 << (c & 31);
+    if (!(seenBits[w] & b)) { seenBits[w] |= b; n++; }
+  }
+  return n;
 }
