@@ -11,7 +11,7 @@ import { buildProcessPanel } from './ui/sidebar/processPanel.js';
 import { buildLookPanel } from './ui/sidebar/lookPanel.js';
 import { ModelProcessor } from './process/processor.js';
 import { buildExportPanel } from './ui/sidebar/exportPanel.js';
-import { buildPipelineBar } from './ui/pipelineBar.js';
+import { buildStatusIndicator } from './ui/statusIndicator.js';
 import { loadPresetFromURL, getPresetData } from './export/preset.js';
 import { saveViewerHtml } from './export/saveHtml.js';
 import { collectFaces, assignFilaments, prepareMesh, build3mf, buildObjMtl, downloadFile } from './export/print3mf.js';
@@ -107,7 +107,7 @@ function showPanel(tab) {
 
 if (!['import', 'process', 'look', 'export'].includes(store.get('activeTab'))) store.set('activeTab', 'import');
 buildTabs(document.getElementById('tab-strip'));
-buildPipelineBar(document.getElementById('pipeline-bar'));
+buildStatusIndicator(document.getElementById('pipe-status'));
 store.subscribe('activeTab', tab => { panelContent.scrollTop = 0; showPanel(tab); });
 showPanel(store.get('activeTab'));
 
