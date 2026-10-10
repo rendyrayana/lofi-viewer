@@ -589,7 +589,9 @@ input[type="number"]:focus { outline: 1px solid var(--c-text-dim); }
 
 /* ── Status indicator (top bar) ─────────────────────────────────────────── */
 .pipe-status {
-  margin-right: 8px;
+  border: 1px solid var(--c-border);
+  background: transparent;
+  cursor: pointer;
   font-family: 'Space Mono', monospace;
   font-size: 11px;
   color: var(--c-text-dim);
@@ -766,3 +768,26 @@ input[type="number"]:focus { outline: 1px solid var(--c-text-dim); }
 .subtab-strip [role="tab"][aria-selected="true"] { background: var(--c-accent); color: var(--c-bg); font-weight: 600; }
 .subtab-body > .panel { padding: 0; }
 .subtabs.is-dim .subtab-body { opacity: 0.55; }
+
+.status-wrap { position: relative; margin-right: 8px; }
+.pipe-status:hover { border-color: var(--c-text-dim); }
+.status-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 50;
+  min-width: 230px;
+  background: var(--c-panel);
+  border: 1px solid var(--c-border-strong);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.status-pop ul { list-style: none; margin: 0; padding: 0; }
+.status-pop button {
+  display: flex; justify-content: space-between; gap: 16px; width: 100%;
+  padding: 7px 8px;
+  background: transparent; border: none; border-radius: 4px;
+  color: var(--c-text); cursor: pointer; text-align: left;
+}
+.status-pop button:hover { background: var(--c-panel-alt); }
+.sp-name { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c-text-faint); }
+.sp-val { font-family: 'Space Mono', monospace; font-size: 11px; }
+.status-pop .is-skipped .sp-val { color: var(--c-text-faint); }

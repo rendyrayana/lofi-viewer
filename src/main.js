@@ -107,7 +107,7 @@ function showPanel(tab) {
 
 if (!['import', 'process', 'look', 'export'].includes(store.get('activeTab'))) store.set('activeTab', 'import');
 buildTabs(document.getElementById('tab-strip'));
-buildStatusIndicator(document.getElementById('pipe-status'));
+buildStatusIndicator(document.getElementById('status-wrap'));
 store.subscribe('activeTab', tab => { panelContent.scrollTop = 0; showPanel(tab); });
 showPanel(store.get('activeTab'));
 

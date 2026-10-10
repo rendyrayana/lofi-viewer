@@ -14,7 +14,7 @@ export function buildTopbar(el) {
       </div>
     </div>
     <div class="topbar-spacer"></div>
-    <span class="pipe-status" id="pipe-status" role="status" aria-live="polite"></span>
+    <div class="status-wrap" id="status-wrap"></div>
     <span id="filename-badge"></span>
     <div class="topbar-actions">
       <button class="icon-btn" id="btn-invert" aria-label="Toggle light/dark" aria-pressed="false" title="Toggle light/dark">
