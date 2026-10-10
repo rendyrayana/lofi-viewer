@@ -47,6 +47,8 @@ const defaults = {
   rotationSpeed: 1.0,
   autoFrame: true,
   aspectRatio: 'free',
+  compare: false,
+  compareSplit: 0.5,
   // Effects
   crtCurvature: 0.0,
   scanlines: 0,

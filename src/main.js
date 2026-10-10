@@ -135,6 +135,11 @@ toolbar.innerHTML = `
       <rect x="1" y="9" width="4" height="4" rx="0.5"/><rect x="9" y="9" width="4" height="4" rx="0.5"/>
     </svg>
   </button>
+  <button class="tb-btn" id="tb-compare" aria-label="Compare with original scan" aria-pressed="false" title="Compare with original">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="1" y="2" width="12" height="10" rx="1"/><path d="M7 0.5v13"/>
+    </svg>
+  </button>
   <div class="tb-divider"></div>
   <button class="tb-btn" id="tb-play" aria-label="Toggle turntable">
     <svg id="tb-play-icon" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -179,6 +184,86 @@ toolbar.querySelector('#tb-frame').addEventListener('click', () => {
   const target = loadedModel || defaultCube;
   if (target) sc.frameObject(target);
 });
+const tbCompare = toolbar.querySelector('#tb-compare');
+tbCompare.addEventListener('click', () => store.set('compare', !store.get('compare')));
+
+// Compare overlay: draggable divider; left = original scan, right = processed.
+const compareEl = document.createElement('div');
+compareEl.id = 'compare-overlay';
+compareEl.hidden = true;
+compareEl.innerHTML = `
+  <span class="cmp-label cmp-left">Original scan</span>
+  <span class="cmp-label cmp-right">Processed</span>
+  <div class="cmp-line"></div>
+  <button class="cmp-handle" aria-label="Drag to move the comparison divider" title="Drag · ← → keys"></button>
+`;
+document.getElementById('viewport').appendChild(compareEl);
+const cmpLine = compareEl.querySelector('.cmp-line');
+const cmpHandle = compareEl.querySelector('.cmp-handle');
+const cmpLeft = compareEl.querySelector('.cmp-left');
+const cmpRight = compareEl.querySelector('.cmp-right');
+
+function layoutCompare() {
+  const r = canvas.getBoundingClientRect(), vp = compareEl.parentElement.getBoundingClientRect();
+  const x = r.left - vp.left + r.width * store.get('compareSplit');
+  cmpLine.style.left = `${x}px`;
+  cmpHandle.style.left = `${x}px`;
+  cmpLeft.style.right = `${vp.width - x + 8}px`;
+  cmpRight.style.left = `${x + 8}px`;
+  compareEl.style.setProperty('--cmp-top', `${r.top - vp.top}px`);
+  compareEl.style.setProperty('--cmp-h', `${r.height}px`);
+  compareEl.style.setProperty('--cmp-l', `${r.left - vp.left}px`);
+  compareEl.style.setProperty('--cmp-w', `${r.width}px`);
+}
+
+cmpHandle.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  cmpHandle.setPointerCapture(e.pointerId);
+  const move = ev => {
+    const r = canvas.getBoundingClientRect();
+    store.set('compareSplit', Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)));
+  };
+  const up = () => {
+    cmpHandle.removeEventListener('pointermove', move);
+    cmpHandle.removeEventListener('pointerup', up);
+  };
+  cmpHandle.addEventListener('pointermove', move);
+  cmpHandle.addEventListener('pointerup', up);
+});
+cmpHandle.addEventListener('keydown', e => {
+  const d = e.key === 'ArrowLeft' ? -0.02 : e.key === 'ArrowRight' ? 0.02 : 0;
+  if (!d) return;
+  e.preventDefault();
+  store.set('compareSplit', Math.min(1, Math.max(0, store.get('compareSplit') + d)));
+});
+
+store.subscribe('compare', on => {
+  compareEl.hidden = !on;
+  tbCompare.classList.toggle('active', on);
+  tbCompare.setAttribute('aria-pressed', String(on));
+  if (on) layoutCompare();
+});
+store.subscribe('compareSplit', layoutCompare);
+window.addEventListener('resize', () => { if (store.get('compare')) layoutCompare(); });
+
+function renderCompareOriginal() {
+  const r = sc.renderer;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const split = Math.round(w * store.get('compareSplit'));
+  if (split <= 0) return;
+  processor.withOriginal(() => {
+    const prevCS = r.outputColorSpace;
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    r.setRenderTarget(null);
+    r.setScissorTest(true);
+    r.setScissor(0, 0, split, h);
+    r.render(sc.scene, sc.camera);
+    r.setScissorTest(false);
+    r.outputColorSpace = prevCS;
+  });
+}
+
 toolbar.querySelector('#tb-play').addEventListener('click', () => {
   store.set('turntable', !store.get('turntable'));
 });
@@ -557,6 +642,7 @@ requestAnimationFrame(animate);
   }
 
   pipeline.render(time * 0.001);
+  if (s.compare && processor.hasModel) renderCompareOriginal();
 
   // Full-resolution overlays: depth-test against the prepass depth so the
   // grid is correctly occluded by the model.

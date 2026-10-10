@@ -539,3 +539,44 @@ input[type="number"]:focus { outline: 1px solid var(--c-text-dim); }
 .panel-row input[type="number"] { width: 72px; }
 
 [hidden] { display: none !important; }
+
+/* ── Compare overlay (part of the viewport: fixed dark, never inverted) ──── */
+#compare-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+#compare-overlay .cmp-line {
+  position: absolute;
+  top: var(--cmp-top, 0); height: var(--cmp-h, 100%);
+  width: 2px; margin-left: -1px;
+  background: rgba(230, 230, 228, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+#compare-overlay .cmp-handle {
+  position: absolute;
+  top: calc(var(--cmp-top, 0px) + var(--cmp-h, 100%) / 2);
+  width: 28px; height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 2px solid rgba(230, 230, 228, 0.95);
+  background: rgba(20, 20, 20, 0.85);
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+#compare-overlay .cmp-handle::before {
+  content: '';
+  position: absolute; inset: 7px 5px;
+  border-left: 2px solid #e6e6e4; border-right: 2px solid #e6e6e4;
+}
+#compare-overlay .cmp-handle:focus-visible { outline: 2px solid #e6e6e4; outline-offset: 2px; }
+#compare-overlay .cmp-label {
+  position: absolute;
+  top: calc(var(--cmp-top, 0px) + 10px);
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #e6e6e4;
+  background: rgba(20, 20, 20, 0.75);
+  padding: 3px 7px;
+  border-radius: 4px;
+}
+[data-viewer] #compare-overlay { display: none; }

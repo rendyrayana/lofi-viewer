@@ -44,12 +44,30 @@ export class ModelProcessor {
     for (const e of this.entries) {
       e.outGeo?.dispose();
       e.outTex?.dispose();
+      e.cleanMat?.dispose();
     }
     this.entries = [];
     this.palette = [];
   }
 
   get hasModel() { return this.entries.length > 0; }
+
+  // Temporarily shows the unprocessed scan with plain Lambert shading.
+  withOriginal(fn) {
+    const saved = this.entries.map(e => [e.mesh.geometry, e.mesh.material]);
+    for (const e of this.entries) {
+      if (!e.cleanMat) {
+        const u = e.mesh.material.uniforms;
+        e.cleanMat = new THREE.MeshLambertMaterial({ map: e.srcMap, color: e.srcMap ? 0xffffff : u.diffuse.value, toneMapped: false });
+      }
+      if (e.cleanMat.map !== e.srcMap) { e.cleanMat.map = e.srcMap; e.cleanMat.needsUpdate = true; }
+      e.mesh.geometry = e.srcGeo;
+      e.mesh.material = e.cleanMat;
+    }
+    try { fn(); } finally {
+      this.entries.forEach((e, i) => { e.mesh.geometry = saved[i][0]; e.mesh.material = saved[i][1]; });
+    }
+  }
 
   clearCache() {
     for (const e of this.entries) e.cache = {};
