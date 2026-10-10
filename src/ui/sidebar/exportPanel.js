@@ -3,7 +3,7 @@ import { takeSnapshot } from '../../export/snapshot.js';
 import { recordTurntable, recordTurntableLoop } from '../../export/record.js';
 import { shareLink } from '../../export/preset.js';
 
-export function buildExportPanel(el, getRenderer, getPipeline = null, getControls = null, onEnterViewer = null, onSaveHtml = null) {
+export function buildExportPanel(el, getRenderer, getPipeline = null, getControls = null, onEnterViewer = null, onSaveHtml = null, { onExport3mf = null, onExportGlb = null } = {}) {
   const s = store.state;
 
   el.innerHTML = `
@@ -49,6 +49,27 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
         <span class="record-progress-label" id="record-progress-label">0%</span>
       </div>
 
+      <span class="panel-section-label">Fabrication</span>
+      <div class="panel-row">
+        <label for="inp-printheight">Print Height (mm)</label>
+        <div class="row-right">
+          <input type="number" id="inp-printheight" min="5" max="400" step="1" value="${s.printHeight}" />
+        </div>
+      </div>
+      <div class="panel-row">
+        <label for="sel-filaments">Filaments<small class="proc-hint">Used when Process palette is Off or 15-bit</small></label>
+        <div class="row-right">
+          <select id="sel-filaments">
+            ${[2, 3, 4, 5, 6, 8, 12, 16].map(n => `<option value="${n}" ${s.printFilaments === n ? 'selected' : ''}>${n}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-3mf">Export 3MF (multi-color)</button>
+      <div class="proc-status" id="print-status" aria-live="polite"></div>
+
+      <span class="panel-section-label">Model</span>
+      <button class="btn btn-ghost" id="btn-glb">Export Processed GLB</button>
+
       <span class="panel-section-label">Share</span>
       <button class="btn btn-primary" id="btn-save-html">Save as HTML</button>
       <button class="btn btn-ghost" id="btn-viewer">Viewer Mode</button>
@@ -89,6 +110,17 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
       },
     );
   });
+  el.querySelector('#inp-printheight').addEventListener('change', e => {
+    const v = Math.min(400, Math.max(5, parseFloat(e.target.value) || 60));
+    e.target.value = v;
+    store.set('printHeight', v);
+  });
+  el.querySelector('#sel-filaments').addEventListener('change', e => store.set('printFilaments', parseInt(e.target.value, 10)));
+  el.querySelector('#btn-3mf').addEventListener('click', () => {
+    const msg = onExport3mf?.();
+    el.querySelector('#print-status').textContent = msg || '';
+  });
+  el.querySelector('#btn-glb').addEventListener('click', () => onExportGlb?.());
   el.querySelector('#btn-save-html').addEventListener('click', () => onSaveHtml?.());
   el.querySelector('#btn-viewer').addEventListener('click', () => onEnterViewer?.());
   el.querySelector('#btn-share').addEventListener('click', () => shareLink());

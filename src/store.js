@@ -61,6 +61,8 @@ const defaults = {
   snapshotRes: 'native',
   videoRes: 'native',
   exportDuration: 4,
+  printHeight: 60,
+  printFilaments: 4,
 };
 
 export { defaults };

@@ -16,6 +16,8 @@ import { buildEffectsPanel } from './ui/sidebar/effectsPanel.js';
 import { buildExportPanel } from './ui/sidebar/exportPanel.js';
 import { loadPresetFromURL, PRESETS, getPresetData } from './export/preset.js';
 import { saveViewerHtml } from './export/saveHtml.js';
+import { collectFaces, assignFilaments, build3mf, download3mf } from './export/print3mf.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { defaults, PANEL_KEYS } from './store.js';
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -110,7 +112,7 @@ function showPanel(tab) {
       near:   sc.perspCamera.near,
       far:    sc.perspCamera.far,
       fov:    sc.perspCamera.fov,
-    }));
+    }), { onExport3mf: handleExport3mf, onExportGlb: handleExportGlb });
   }
 }
 
@@ -311,6 +313,46 @@ async function runProcess() {
 }
 
 PANEL_KEYS.process.forEach(k => store.subscribe(k, scheduleProcess));
+
+// ── Fabrication / model export ────────────────────────────────────────────────
+function exportBaseName() {
+  return (store.get('filename') || 'model').replace(/\.[^.]+$/, '');
+}
+
+function handleExport3mf() {
+  if (!processor.hasModel) return 'Load a model first.';
+  if (store.get('procBusy')) return 'Still processing — try again in a moment.';
+  const s = store.state;
+  if (s.tris > 300000 && !confirm(`This mesh has ${s.tris.toLocaleString()} triangles. Decimating first is recommended. Export anyway?`)) return '';
+  const parts = collectFaces(processor);
+  const fixed = ['preset', 'extract', 'custom'].includes(s.procPalette) ? processor.palette : null;
+  const slots = assignFilaments(parts, fixed, s.printFilaments);
+  const { bytes, stats } = build3mf(parts, slots, { heightMm: s.printHeight, name: exportBaseName() });
+  download3mf(bytes, `${exportBaseName()}-lofi.3mf`);
+  return `${stats.triangles.toLocaleString()} tris · ${stats.filaments} filaments · ${stats.sizeMm.map(v => v.toFixed(0)).join('×')} mm`;
+}
+
+function handleExportGlb() {
+  if (!processor.hasModel) return;
+  const root = new THREE.Group();
+  for (const { mesh } of processor.entries) {
+    mesh.updateWorldMatrix(true, false);
+    const u = mesh.material.uniforms;
+    const map = u.uHasMap.value ? u.map.value : null;
+    const mat = new THREE.MeshStandardMaterial({ map, color: map ? 0xffffff : u.diffuse.value, roughness: 1, metalness: 0 });
+    const out = new THREE.Mesh(mesh.geometry, mat);
+    out.name = mesh.name;
+    out.applyMatrix4(mesh.matrixWorld);
+    root.add(out);
+  }
+  new GLTFExporter().parse(root, glb => {
+    const url = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `${exportBaseName()}-lofi.glb`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    root.traverse(o => o.material?.dispose());
+  }, err => alert(`GLB export failed: ${err.message || err}`), { binary: true });
+}
 
 // ── Env / background ──────────────────────────────────────────────────────────
 let bgImageTex = null;
