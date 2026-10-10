@@ -64,6 +64,23 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
           </select>
         </div>
       </div>
+      <div class="panel-row">
+        <label for="sel-minisland">Merge Color Specks<small class="proc-hint">Recolor patches smaller than N faces</small></label>
+        <div class="row-right">
+          <select id="sel-minisland">
+            ${[[0, 'Off'], [2, '2 faces'], [4, '4 faces'], [8, '8 faces'], [16, '16 faces'], [32, '32 faces']].map(([n, l]) => `<option value="${n}" ${s.printMinIsland === n ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="panel-row">
+        <label for="sw-closeholes">Close Holes<small class="proc-hint">Cap open scan boundaries so the mesh is watertight</small></label>
+        <div class="row-right">
+          <label class="switch-wrap" for="sw-closeholes" aria-label="Close holes">
+            <input type="checkbox" id="sw-closeholes" role="switch" ${s.printCloseHoles ? 'checked' : ''} />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+      </div>
       <button class="btn btn-primary" id="btn-3mf">Export 3MF (multi-color)</button>
       <div class="proc-status" id="print-status" aria-live="polite"></div>
 
@@ -116,6 +133,8 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
     store.set('printHeight', v);
   });
   el.querySelector('#sel-filaments').addEventListener('change', e => store.set('printFilaments', parseInt(e.target.value, 10)));
+  el.querySelector('#sel-minisland').addEventListener('change', e => store.set('printMinIsland', parseInt(e.target.value, 10)));
+  el.querySelector('#sw-closeholes').addEventListener('change', e => store.set('printCloseHoles', e.target.checked));
   el.querySelector('#btn-3mf').addEventListener('click', () => {
     const msg = onExport3mf?.();
     el.querySelector('#print-status').textContent = msg || '';

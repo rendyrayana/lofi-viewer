@@ -63,6 +63,8 @@ const defaults = {
   exportDuration: 4,
   printHeight: 60,
   printFilaments: 4,
+  printMinIsland: 4,
+  printCloseHoles: true,
 };
 
 export { defaults };

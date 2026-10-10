@@ -505,6 +505,7 @@ input[type="number"]:focus { outline: 1px solid var(--c-text-dim); }
   min-height: 14px;
   padding-top: 6px;
 }
+.proc-status { white-space: pre-line; }
 .proc-hint { display: block; color: var(--c-text-faint); font-size: 10px; margin-top: 2px; }
 .swatches {
   display: flex;

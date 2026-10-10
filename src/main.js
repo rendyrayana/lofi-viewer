@@ -355,9 +355,17 @@ function handleExport3mf() {
   const parts = collectFaces(processor);
   const fixed = ['preset', 'extract', 'custom'].includes(s.procPalette) ? processor.palette : null;
   const slots = assignFilaments(parts, fixed, s.printFilaments);
-  const { bytes, stats } = build3mf(parts, slots, { heightMm: s.printHeight, name: exportBaseName() });
+  const { bytes, stats } = build3mf(parts, slots, { heightMm: s.printHeight, name: exportBaseName(), minIsland: s.printMinIsland, closeHoles: s.printCloseHoles });
   download3mf(bytes, `${exportBaseName()}-lofi.3mf`);
-  return `${stats.triangles.toLocaleString()} tris · ${stats.filaments} filaments · ${stats.sizeMm.map(v => v.toFixed(0)).join('×')} mm`;
+  const lines = [`${stats.triangles.toLocaleString()} tris · ${stats.filaments} filaments · ${stats.sizeMm.map(v => v.toFixed(0)).join('×')} mm`];
+  if (stats.holesClosed) lines.push(`Closed ${stats.holesClosed} hole${stats.holesClosed > 1 ? 's' : ''}`);
+  if (stats.islandsMerged) lines.push(`Merged ${stats.islandsMerged} color specks (${stats.facesRecolored} faces)`);
+  if (stats.openEdges || stats.nonManifoldEdges) {
+    lines.push(`Warning: not watertight — ${stats.openEdges} open, ${stats.nonManifoldEdges} non-manifold edges. The slicer may need to repair it.`);
+  } else {
+    lines.push('Watertight ✓');
+  }
+  return lines.join('\n');
 }
 
 function buildProcessedGlb() {

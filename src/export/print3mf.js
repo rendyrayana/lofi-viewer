@@ -109,7 +109,7 @@ export function paintCode(state) {
 }
 
 // Builds a single-file 3MF (Y-up scene → Z-up, millimetres, resting on z = 0).
-export function build3mf(parts, slots, { heightMm = 60, name = 'lofi-viewer' } = {}) {
+export function build3mf(parts, slots, { heightMm = 60, name = 'lofi-viewer', minIsland = 0, closeHoles = true } = {}) {
   const box = new THREE.Box3();
   const v = new THREE.Vector3();
   for (const p of parts) for (let i = 0; i < p.positions.length; i += 3) box.expandByPoint(v.fromArray(p.positions, i));
@@ -119,9 +119,21 @@ export function build3mf(parts, slots, { heightMm = 60, name = 'lofi-viewer' } =
 
   const objects = [];
   const items = [];
+  const check = { openEdges: 0, nonManifoldEdges: 0, islandsMerged: 0, facesRecolored: 0, holesClosed: 0 };
   let id = 2;
   for (const p of parts) {
     const { verts, tris } = weld(p.positions, p.slot);
+    if (closeHoles) check.holesClosed += fillHoles(verts, tris);
+    const edges = edgeFaces(tris);
+    for (const faces of edges.values()) {
+      if (faces.length === 1) check.openEdges++;
+      else if (faces.length > 2) check.nonManifoldEdges++;
+    }
+    if (minIsland > 1) {
+      const r = mergeIslands(tris, edges, minIsland);
+      check.islandsMerged += r.islands;
+      check.facesRecolored += r.faces;
+    }
     const vx = [];
     for (let i = 0; i < verts.length; i += 3) {
       const x = (verts[i] - center.x) * k;
@@ -166,7 +178,7 @@ export function build3mf(parts, slots, { heightMm = 60, name = 'lofi-viewer' } =
   };
   return {
     bytes: zipSync(files, { level: 6 }),
-    stats: { filaments: slots.length, triangles: parts.reduce((s, p) => s + p.colors.length, 0), sizeMm: [size.x * k, size.z * k, size.y * k] },
+    stats: { filaments: slots.length, triangles: parts.reduce((s, p) => s + p.colors.length, 0), sizeMm: [size.x * k, size.z * k, size.y * k], ...check },
   };
 }
 
@@ -192,6 +204,112 @@ function weld(positions, slot) {
     tris.push(ids[0], ids[1], ids[2], slot[t]);
   }
   return { verts, tris };
+}
+
+// Edge → list of faces, on welded triangles laid out as [v1, v2, v3, slot].
+function edgeFaces(tris) {
+  const edges = new Map();
+  for (let f = 0; f < tris.length / 4; f++) {
+    for (let e = 0; e < 3; e++) {
+      const a = tris[f * 4 + e], b = tris[f * 4 + (e + 1) % 3];
+      const key = a < b ? a * 4294967296 + b : b * 4294967296 + a;
+      const list = edges.get(key);
+      if (list) list.push(f); else edges.set(key, [f]);
+    }
+  }
+  return edges;
+}
+
+// Recolours connected same-filament patches smaller than `minFaces` with the
+// filament they share the most edges with, so prints don't get stray specks.
+function mergeIslands(tris, edges, minFaces) {
+  const nF = tris.length / 4;
+  const nb = Array.from({ length: nF }, () => []);
+  for (const faces of edges.values()) {
+    if (faces.length !== 2) continue;
+    nb[faces[0]].push(faces[1]); nb[faces[1]].push(faces[0]);
+  }
+  let islands = 0;
+  const recolored = new Set();
+  for (let pass = 0; pass < 4; pass++) {
+    const comp = new Int32Array(nF).fill(-1);
+    let changed = false;
+    for (let seed = 0; seed < nF; seed++) {
+      if (comp[seed] >= 0) continue;
+      const slot = tris[seed * 4 + 3];
+      const members = [seed];
+      comp[seed] = seed;
+      for (let i = 0; i < members.length; i++) {
+        for (const n of nb[members[i]]) {
+          if (comp[n] < 0 && tris[n * 4 + 3] === slot) { comp[n] = seed; members.push(n); }
+        }
+      }
+      if (members.length >= minFaces) continue;
+      const votes = new Map();
+      for (const m of members) for (const n of nb[m]) {
+        const s = tris[n * 4 + 3];
+        if (s !== slot) votes.set(s, (votes.get(s) || 0) + 1);
+      }
+      if (!votes.size) continue;
+      let target = slot, best = 0;
+      for (const [s, v] of votes) if (v > best) { best = v; target = s; }
+      for (const m of members) { tris[m * 4 + 3] = target; recolored.add(m); }
+      islands++; changed = true;
+    }
+    if (!changed) break;
+  }
+  return { islands, faces: recolored.size };
+}
+
+// Closes each boundary loop with a fan to the loop's centroid. New faces take
+// the filament most common along the loop.
+function fillHoles(verts, tris) {
+  const edges = edgeFaces(tris);
+  const boundary = [];
+  for (const faces of edges.values()) {
+    if (faces.length !== 1) continue;
+    const f = faces[0];
+    for (let e = 0; e < 3; e++) {
+      const a = tris[f * 4 + e], b = tris[f * 4 + (e + 1) % 3];
+      const ka = a < b ? a * 4294967296 + b : b * 4294967296 + a;
+      if (edges.get(ka) === faces) boundary.push([a, b, tris[f * 4 + 3]]);
+    }
+  }
+  if (!boundary.length) return 0;
+
+  // Group boundary edges into loops via shared vertices (union-find).
+  const parent = new Map();
+  const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+  for (const [a, b] of boundary) {
+    if (!parent.has(a)) parent.set(a, a);
+    if (!parent.has(b)) parent.set(b, b);
+    parent.set(find(a), find(b));
+  }
+  const loops = new Map();
+  for (const edge of boundary) {
+    const r = find(edge[0]);
+    if (!loops.has(r)) loops.set(r, []);
+    loops.get(r).push(edge);
+  }
+
+  let closed = 0;
+  for (const loop of loops.values()) {
+    if (loop.length < 3) continue;
+    const vs = new Set();
+    loop.forEach(([a, b]) => { vs.add(a); vs.add(b); });
+    let cx = 0, cy = 0, cz = 0;
+    for (const v of vs) { cx += verts[v * 3]; cy += verts[v * 3 + 1]; cz += verts[v * 3 + 2]; }
+    const c = verts.length / 3;
+    verts.push(cx / vs.size, cy / vs.size, cz / vs.size);
+    const votes = new Map();
+    loop.forEach(([, , s]) => votes.set(s, (votes.get(s) || 0) + 1));
+    let slot = loop[0][2], best = 0;
+    for (const [s, n] of votes) if (n > best) { best = n; slot = s; }
+    // Boundary edge a→b belongs to an existing face; the cap uses b→a.
+    for (const [a, b] of loop) tris.push(b, a, c, slot);
+    closed++;
+  }
+  return closed;
 }
 
 const fmt = n => (Math.abs(n) < 1e-9 ? '0' : n.toFixed(4));
