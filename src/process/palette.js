@@ -233,18 +233,21 @@ export function quantizeToPalette(img, hexColors, pattern = 'psx4', strength = 1
   const { data, width: W, height: H } = img;
   const out = new Uint8ClampedArray(data.length);
   const spread = 255 / Math.max(2, Math.cbrt(pal.length) * 2);
-  const cache = new Map();
+  // Nearest-colour lookup at 15-bit precision (32,768 cells), filled lazily,
+  // so large textures cost one table read per pixel instead of a palette scan.
+  const lut = new Int16Array(32768).fill(-1);
   const nearest = (r, g, b) => {
-    const key = (r << 16) | (g << 8) | b;
-    let best = cache.get(key);
-    if (best === undefined) {
-      best = 0;
+    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    let best = lut[key];
+    if (best < 0) {
+      const cr = (r & 0xf8) + 4, cg = (g & 0xf8) + 4, cb = (b & 0xf8) + 4;
       let bestD = Infinity;
+      best = 0;
       for (let k = 0; k < pal.length; k++) {
-        const dist = redmean(r, g, b, pal[k]);
+        const dist = redmean(cr, cg, cb, pal[k]);
         if (dist < bestD) { bestD = dist; best = k; }
       }
-      cache.set(key, best);
+      lut[key] = best;
     }
     return best;
   };

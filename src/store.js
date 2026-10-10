@@ -101,10 +101,15 @@ class Store {
   get(key) { return this._state[key]; }
   get state() { return this._state; }
 
+  // A failing listener is logged but never stops the others (or the caller).
   set(key, value) {
     this._state[key] = value;
-    (this._subs.get(key) || []).forEach(fn => fn(value));
-    (this._subs.get('*') || []).forEach(fn => fn(key, value));
+    for (const fn of this._subs.get(key) || []) {
+      try { fn(value); } catch (e) { console.error(`store listener for "${key}" failed:`, e); }
+    }
+    for (const fn of this._subs.get('*') || []) {
+      try { fn(key, value); } catch (e) { console.error(`store "*" listener failed on "${key}":`, e); }
+    }
   }
 
   setMany(obj) {

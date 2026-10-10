@@ -160,9 +160,18 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
   el.querySelector('#sel-colordetail').addEventListener('change', e => store.set('printColorDetail', parseInt(e.target.value, 10)));
   el.querySelector('#sel-minisland').addEventListener('change', e => store.set('printMinIsland', parseInt(e.target.value, 10)));
   el.querySelector('#sw-closeholes').addEventListener('change', e => store.set('printCloseHoles', e.target.checked));
-  el.querySelector('#btn-3mf').addEventListener('click', () => {
-    const msg = onExport3mf?.();
-    el.querySelector('#print-status').textContent = msg || '';
+  el.querySelector('#btn-3mf').addEventListener('click', async () => {
+    const btn = el.querySelector('#btn-3mf'), status = el.querySelector('#print-status');
+    btn.disabled = true;
+    status.textContent = store.get('procBusy') ? 'Waiting for processing to finish…' : 'Exporting…';
+    try {
+      status.textContent = (await onExport3mf?.()) || '';
+    } catch (e) {
+      console.error('3MF export failed:', e);
+      status.textContent = `Export failed: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+    }
   });
   el.querySelector('#btn-glb').addEventListener('click', () => onExportGlb?.());
   el.querySelector('#btn-save-html').addEventListener('click', () => onSaveHtml?.());

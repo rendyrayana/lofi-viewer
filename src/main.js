@@ -392,23 +392,29 @@ let procTimer = null, procRunning = false, procQueued = false;
 
 function scheduleProcess() {
   clearTimeout(procTimer);
-  procTimer = setTimeout(runProcess, 60);
+  procTimer = setTimeout(() => { procTimer = null; runProcess(); }, 60);
+}
+
+let idleWaiters = [];
+// Resolves once no processing run is active or queued.
+function processingIdle() {
+  return !procRunning && !procQueued ? Promise.resolve() : new Promise(r => idleWaiters.push(r));
 }
 
 async function runProcess() {
   if (!processor.hasModel) { store.set('procStats', null); return; }
   if (procRunning) { procQueued = true; return; }
   procRunning = true;
-  store.set('procBusy', true);
-  // Let the "Processing…" status paint before the synchronous heavy work.
-  // Frames stop when the page is hidden, so a timer caps the wait.
-  if (!document.hidden) {
-    await Promise.race([
-      new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),
-      new Promise(r => setTimeout(r, 100)),
-    ]);
-  }
   try {
+    store.set('procBusy', true);
+    // Let the "Processing…" status paint before the synchronous heavy work.
+    // Frames stop when the page is hidden, so a timer caps the wait.
+    if (!document.hidden) {
+      await Promise.race([
+        new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),
+        new Promise(r => setTimeout(r, 100)),
+      ]);
+    }
     const s = store.state;
     const stats = await processor.run({
       decimate: s.procDecimate,
@@ -437,7 +443,13 @@ async function runProcess() {
   } finally {
     procRunning = false;
     store.set('procBusy', false);
-    if (procQueued) { procQueued = false; runProcess(); }
+    if (procQueued) {
+      procQueued = false;
+      runProcess();
+    } else {
+      idleWaiters.forEach(r => r());
+      idleWaiters = [];
+    }
   }
 }
 
@@ -485,9 +497,14 @@ function exportBaseName() {
   return (store.get('filename') || 'model').replace(/\.[^.]+$/, '');
 }
 
-function handleExport3mf() {
+async function handleExport3mf() {
   if (!processor.hasModel) return 'Load a model first.';
-  if (store.get('procBusy')) return 'Still processing — try again in a moment.';
+  clearTimeout(procTimer);
+  if (procTimer || procRunning || procQueued) {
+    procTimer = null;
+    if (!procRunning) runProcess();
+    await processingIdle();
+  }
   const s = store.state;
   if (s.tris * 4 ** s.printColorDetail > 600000 && !confirm(`The print file will have ${(s.tris * 4 ** s.printColorDetail).toLocaleString()} triangles. Decimate first or lower Color detail? Export anyway?`)) return '';
   const parts = collectFaces(processor, { subdiv: s.printColorDetail });
