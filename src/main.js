@@ -45,8 +45,6 @@ const sc = setupScene(canvas);
 const pipeline = new PSXPipeline(sc.renderer, sc.scene, sc.camera);
 
 let loadedModel = null;
-let loadedModelFile = null;
-let loadedTexFile = null;
 let defaultCube = null;
 let _depthOnlyMat = null;
 const processor = new ModelProcessor();
@@ -110,13 +108,7 @@ function showPanel(tab) {
   } else if (tab === 'effects') {
     buildEffectsPanel(div, { onReset: () => showPanel('effects') });
   } else if (tab === 'export') {
-    buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, () => saveViewerHtml(loadedModelFile, loadedTexFile, {
-      pos:    sc.perspCamera.position.toArray(),
-      target: sc.controls.target.toArray(),
-      near:   sc.perspCamera.near,
-      far:    sc.perspCamera.far,
-      fov:    sc.perspCamera.fov,
-    }), { onExport3mf: handleExport3mf, onExportGlb: handleExportGlb });
+    buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExport3mf: handleExport3mf, onExportGlb: handleExportGlb });
   }
 }
 
@@ -214,7 +206,6 @@ store.subscribe('projection', () => updateToolbarProj());
 async function handleLoadModel(file) {
   try {
     const obj = await loadModel(file);
-    loadedModelFile = file;
     handleClearScene(false);
     // Remove default cube when a real model loads
     if (defaultCube) { sc.scene.remove(defaultCube); defaultCube.geometry.dispose(); defaultCube = null; }
@@ -240,7 +231,6 @@ async function handleLoadModel(file) {
 
 async function handleLoadTexture(file) {
   if (!loadedModel) return;
-  loadedTexFile = file;
   const tex = await loadTexture(file);
   loadedModel.traverse(child => {
     if (child.isMesh && child.material) {
@@ -270,7 +260,6 @@ function handleClearScene(resetStore = true) {
   pipeline.psxMaterials.forEach(m => m.dispose());
   pipeline.psxMaterials = [];
   pipeline.psxMeshes = [];
-  loadedTexFile = null;
   if (resetStore) store.setMany({ filename: null, filesize: null, tris: 0, procStats: null });
 }
 
@@ -371,8 +360,7 @@ function handleExport3mf() {
   return `${stats.triangles.toLocaleString()} tris · ${stats.filaments} filaments · ${stats.sizeMm.map(v => v.toFixed(0)).join('×')} mm`;
 }
 
-function handleExportGlb() {
-  if (!processor.hasModel) return;
+function buildProcessedGlb() {
   const root = new THREE.Group();
   for (const { mesh } of processor.entries) {
     mesh.updateWorldMatrix(true, false);
@@ -384,13 +372,43 @@ function handleExportGlb() {
     out.applyMatrix4(mesh.matrixWorld);
     root.add(out);
   }
-  new GLTFExporter().parse(root, glb => {
+  return new Promise((resolve, reject) => {
+    new GLTFExporter().parse(root, glb => {
+      root.traverse(o => o.material?.dispose());
+      resolve(glb);
+    }, reject, { binary: true });
+  });
+}
+
+async function handleExportGlb() {
+  if (!processor.hasModel) return;
+  try {
+    const glb = await buildProcessedGlb();
     const url = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
     const a = document.createElement('a');
     a.href = url; a.download = `${exportBaseName()}-lofi.glb`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    root.traverse(o => o.material?.dispose());
-  }, err => alert(`GLB export failed: ${err.message || err}`), { binary: true });
+  } catch (err) {
+    alert(`GLB export failed: ${err.message || err}`);
+  }
+}
+
+// The HTML viewer embeds the processed model, so it matches the editor.
+async function handleSaveHtml() {
+  if (!processor.hasModel || !loadedModel) { alert('No model loaded — load a model first.'); return; }
+  try {
+    const glb = await buildProcessedGlb();
+    const file = new File([glb], `${exportBaseName()}.glb`, { type: 'model/gltf-binary' });
+    await saveViewerHtml(file, null, {
+      pos:    sc.perspCamera.position.toArray(),
+      target: sc.controls.target.toArray(),
+      near:   sc.perspCamera.near,
+      far:    sc.perspCamera.far,
+      fov:    sc.perspCamera.fov,
+    });
+  } catch (err) {
+    alert(`HTML export failed: ${err.message || err}`);
+  }
 }
 
 // ── Env / background ──────────────────────────────────────────────────────────
