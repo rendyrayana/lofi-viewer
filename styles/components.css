@@ -602,19 +602,20 @@ input[type="number"]:focus { outline: 1px solid var(--c-text-dim); }
 #pipeline-bar::-webkit-scrollbar { display: none; }
 .pipe-stages { display: flex; align-items: center; gap: 6px; list-style: none; margin: 0; padding: 0; flex-shrink: 0; }
 .pipe-stage {
-  display: flex; align-items: baseline; gap: 6px;
-  padding: 2px 8px;
-  border: 1px solid var(--c-border);
-  border-radius: 4px;
+  display: flex; align-items: baseline; gap: 5px;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 3px;
   background: transparent;
   color: var(--c-text);
   cursor: pointer;
   white-space: nowrap;
 }
-.pipe-stage:hover { border-color: var(--c-text-dim); }
-.pipe-name { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c-text-dim); }
+.pipe-stage:hover { background: var(--c-panel-alt); }
+.pipe-stages li + li::before { content: '·'; color: var(--c-text-faint); margin-right: 6px; }
+.pipe-stages li { display: flex; align-items: baseline; }
+.pipe-name { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c-text-faint); }
 .pipe-val { font-family: 'Space Mono', monospace; font-size: 11px; }
-.pipe-stage.is-skipped { border-style: dashed; }
 .pipe-stage.is-skipped .pipe-val { color: var(--c-text-faint); }
 .pipe-status {
   margin-left: auto;
