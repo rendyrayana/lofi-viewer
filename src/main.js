@@ -88,7 +88,11 @@ function showPanel(tab) {
       onClearScene: handleClearScene,
     });
   } else if (tab === 'process') {
-    panelCleanup = buildProcessPanel(div, { onReset: () => showPanel('process') });
+    panelCleanup = buildProcessPanel(div, {
+      onReset: () => showPanel('process'),
+      onRerunFresh: () => { processor.clearCache(); scheduleProcess(); },
+      onCopyMetrics: copyMetrics,
+    });
   } else if (tab === 'render') {
     buildRenderPanel(div, { onReset: () => showPanel('render') });
   } else if (tab === 'environment') {
@@ -313,6 +317,41 @@ async function runProcess() {
 }
 
 PANEL_KEYS.process.forEach(k => store.subscribe(k, scheduleProcess));
+
+function gpuName() {
+  const gl = sc.renderer.getContext();
+  const ext = gl.getExtension('WEBGL_debug_renderer_info');
+  return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+}
+
+async function copyMetrics(format) {
+  const st = store.get('procStats');
+  if (!st) return false;
+  const settings = Object.fromEntries(PANEL_KEYS.process.map(k => [k.replace(/^proc/, '').replace(/^./, c => c.toLowerCase()), store.get(k)]));
+  const row = {
+    model: store.get('filename') || 'default-cube',
+    srcTris: st.srcTris, tris: st.tris, charts: st.charts,
+    atlasCoverage: st.coverage != null ? +(st.coverage * 100).toFixed(2) : null,
+    texture: st.texW ? `${st.texW}x${st.texH}` : null,
+    colors: st.colors, palette: st.palette,
+    totalMs: st.ms, ...Object.fromEntries(Object.entries(st.timings).map(([k, v]) => [`${k}Ms`, v])),
+    ...settings,
+    gpu: gpuName(), cpuThreads: navigator.hardwareConcurrency, userAgent: navigator.userAgent,
+    date: new Date().toISOString(),
+  };
+  let text;
+  if (format === 'csv') {
+    const cell = v => {
+      const str = Array.isArray(v) ? v.join(' ') : String(v ?? '');
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    text = Object.keys(row).join(',') + '\n' + Object.values(row).map(cell).join(',');
+  } else {
+    text = JSON.stringify(row, null, 2);
+  }
+  await navigator.clipboard.writeText(text);
+  return true;
+}
 
 // ── Fabrication / model export ────────────────────────────────────────────────
 function exportBaseName() {

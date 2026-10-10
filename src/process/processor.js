@@ -51,44 +51,58 @@ export class ModelProcessor {
 
   get hasModel() { return this.entries.length > 0; }
 
+  clearCache() {
+    for (const e of this.entries) e.cache = {};
+  }
+
   async run(opts) {
     const t0 = performance.now();
+    const timings = {};
+    const time = async (stage, fn) => {
+      const s = performance.now();
+      const r = await fn();
+      timings[stage] = (timings[stage] ?? 0) + (performance.now() - s);
+      return r;
+    };
     const totalSrc = this.entries.reduce((s, e) => s + e.srcTris, 0) || 1;
     const N = opts.texSize === 'original'
       ? (opts.decimate ? DECIMATED_DEFAULT_TEX : null)
       : parseInt(opts.texSize, 10);
-    let tris = 0, charts = 0, texW = 0, texH = 0;
+    let tris = 0, charts = 0, texW = 0, texH = 0, coverage = null;
     const images = [];
 
     for (const e of this.entries) {
       const c = e.cache;
       let geo = e.srcGeo, img = null, flipY = true, baked = false;
       const hasTex = !!(e.srcMap?.image && e.srcGeo.attributes.uv);
-      if (hasTex && !c.sampler) c.sampler = makeSampler(e.srcMap);
+      if (hasTex && !c.sampler) c.sampler = await time('readTexture', () => makeSampler(e.srcMap));
 
       if (opts.decimate) {
         const budget = Math.max(4, Math.round(opts.targetTris * e.srcTris / totalSrc));
         if (c.lowBudget !== budget) {
-          c.welded ??= weldPositions(e.srcGeo);
-          c.low = await decimate(c.welded, budget);
+          if (!c.welded) c.welded = await time('weld', () => weldPositions(e.srcGeo));
+          c.low = await time('decimate', () => decimate(c.welded, budget));
           c.lowBudget = budget;
           c.unwraps = {};
           c.bakes = {};
         }
         const uk = `${N}|${opts.flat}`;
-        const low = c.unwraps[uk] ??= unwrap(c.low, N, { flat: opts.flat });
+        if (!c.unwraps[uk]) c.unwraps[uk] = await time('unwrap', () => unwrap(c.low, N, { flat: opts.flat }));
+        const low = c.unwraps[uk];
         geo = buildGeometry(low);
         charts += low.chartCount;
         if (hasTex) {
-          c.source ??= prepareSource(e.srcGeo);
+          if (!c.source) c.source = await time('bvh', () => prepareSource(e.srcGeo));
           c.bakes ??= {};
-          img = c.bakes[uk] ??= bake(low, c.source, c.sampler, N);
+          if (!c.bakes[uk]) c.bakes[uk] = await time('bake', () => bake(low, c.source, c.sampler, N));
+          img = c.bakes[uk];
+          coverage = img.coverage;
           flipY = false;
           baked = true;
         }
       } else if (hasTex) {
         const full = { data: c.sampler.data, width: c.sampler.width, height: c.sampler.height };
-        img = N ? downsample(full, N, opts.texFilter) : full;
+        img = N ? await time('downsample', () => downsample(full, N, opts.texFilter)) : full;
         flipY = c.sampler.flipY;
       }
 
@@ -99,25 +113,27 @@ export class ModelProcessor {
       e.nextGeo = geo;
     }
 
-    this.palette = resolvePalette(opts, images);
+    this.palette = await time('palette', () => resolvePalette(opts, images));
     let colors = 0;
     for (const e of this.entries) {
       if (e.image && opts.palette !== 'off') {
-        const q = opts.palette === '15bit'
+        const q = await time('quantize', () => (opts.palette === '15bit'
           ? quantize15(e.image, opts.dither)
-          : quantizeToPalette(e.image, this.palette, opts.dither, opts.ditherStrength);
+          : quantizeToPalette(e.image, this.palette, opts.dither, opts.ditherStrength)));
         e.image = { ...q, flipY: e.image.flipY };
       }
-      this._apply(e, opts);
+      await time('upload', () => this._apply(e, opts));
       if (e.image) {
         colors = Math.max(colors, countColors(e.image));
         texW = Math.max(texW, e.image.width); texH = Math.max(texH, e.image.height);
       }
     }
 
+    const round = v => Math.round(v * 10) / 10;
     return {
       srcTris: Math.round(totalSrc), tris: Math.round(tris), charts,
-      texW, texH, colors, palette: this.palette,
+      texW, texH, colors, palette: this.palette, coverage,
+      timings: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, round(v)])),
       ms: Math.round(performance.now() - t0),
     };
   }

@@ -13,7 +13,7 @@ function mkSwitch(id, checked) {
 const sel = (cur, val) => (String(cur) === String(val) ? 'selected' : '');
 const MAX_CUSTOM = 16;
 
-export function buildProcessPanel(el, { onReset } = {}) {
+export function buildProcessPanel(el, { onReset, onRerunFresh, onCopyMetrics } = {}) {
   const s = store.state;
 
   el.innerHTML = `
@@ -119,6 +119,11 @@ export function buildProcessPanel(el, { onReset } = {}) {
 
       <dl class="proc-stats" id="proc-stats"></dl>
       <div class="proc-status" id="proc-status" aria-live="polite"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="btn-rerun" title="Clear caches and time every stage from scratch">Re-run (no cache)</button>
+        <button class="btn btn-ghost" id="btn-copy-json">Copy JSON</button>
+        <button class="btn btn-ghost" id="btn-copy-csv">Copy CSV</button>
+      </div>
 
       <div style="padding:12px 0 4px;">
         <button class="btn btn-ghost" id="btn-reset-process" style="width:100%">Reset to Defaults</button>
@@ -179,11 +184,14 @@ export function buildProcessPanel(el, { onReset } = {}) {
     const rows = [
       ['Triangles', st.tris === st.srcTris ? st.tris.toLocaleString() : `${st.srcTris.toLocaleString()} → ${st.tris.toLocaleString()}`],
       ...(st.charts ? [['UV charts', st.charts.toLocaleString()]] : []),
+      ...(st.coverage != null ? [['Atlas use', `${(st.coverage * 100).toFixed(1)}%`]] : []),
       ['Texture', st.texW ? `${st.texW}×${st.texH}` : 'none'],
       ['Colors', st.colors ? st.colors.toLocaleString() : '—'],
-      ['Time', `${st.ms} ms`],
+      ['Total', `${st.ms} ms`],
     ];
-    dl.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    const stages = Object.entries(st.timings || {}).filter(([, v]) => v >= 0.1);
+    dl.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') +
+      stages.map(([k, v]) => `<dt class="sub">${k}</dt><dd class="sub">${v} ms</dd>`).join('');
   }
 
   // ── Wiring ──────────────────────────────────────────────────────────────────
@@ -230,6 +238,14 @@ export function buildProcessPanel(el, { onReset } = {}) {
   const slStr = $('#sl-ditherstr');
   slStr.addEventListener('input', () => { $('#lbl-ditherstr').textContent = parseFloat(slStr.value).toFixed(2); });
   slStr.addEventListener('change', () => store.set('procDitherStrength', parseFloat(slStr.value)));
+
+  const flash = msg => {
+    $('#proc-status').textContent = msg;
+    setTimeout(() => { if ($('#proc-status').textContent === msg) $('#proc-status').textContent = ''; }, 1800);
+  };
+  $('#btn-rerun').addEventListener('click', () => onRerunFresh?.());
+  $('#btn-copy-json').addEventListener('click', async () => flash(await onCopyMetrics?.('json') ? 'Metrics copied (JSON)' : 'Nothing to copy'));
+  $('#btn-copy-csv').addEventListener('click', async () => flash(await onCopyMetrics?.('csv') ? 'Metrics copied (CSV)' : 'Nothing to copy'));
 
   $('#btn-reset-process').addEventListener('click', () => {
     if (!confirm('Reset all Process settings to defaults?')) return;
