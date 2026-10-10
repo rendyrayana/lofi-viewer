@@ -87,6 +87,7 @@ function showPanel(tab) {
     panelCleanup = buildProcessPanel(div, {
       onRerunFresh: () => { processor.clearCache(); scheduleProcess(); },
       onCopyMetrics: copyMetrics,
+      getPreview: () => processor.entries.find(e => e.image)?.image ?? null,
     });
   } else if (tab === 'look') {
     const scroll = panelContent.scrollTop;
@@ -396,6 +397,11 @@ async function runProcess() {
       flat: s.procFlat,
       texSize: s.procTexSize,
       texFilter: s.procTexFilter,
+      texMode: s.procTexMode,
+      texDensity: s.procTexDensity,
+      printHeight: s.printHeight,
+      saturation: s.procSaturation,
+      contrast: s.procContrast,
       palette: s.procPalette,
       preset: s.procPreset,
       colors: s.procColors,
@@ -416,6 +422,8 @@ async function runProcess() {
 }
 
 PANEL_KEYS.process.forEach(k => store.subscribe(k, scheduleProcess));
+// Texel density is defined per centimetre of the printed size.
+store.subscribe('printHeight', () => { if (store.get('procTexMode') === 'density' && store.get('procTexSize') !== 'original') scheduleProcess(); });
 
 function gpuName() {
   const gl = sc.renderer.getContext();

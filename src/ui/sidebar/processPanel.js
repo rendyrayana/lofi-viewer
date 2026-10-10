@@ -1,5 +1,6 @@
 import { store, defaults, PANEL_KEYS } from '../../store.js';
 import { PALETTE_PRESETS } from '../../process/palette.js';
+import { PROCESS_TARGETS, applyTarget } from '../../export/preset.js';
 
 const BUDGETS = [
   { n: 300, hint: 'Handheld' },
@@ -10,10 +11,17 @@ const BUDGETS = [
 ];
 const TEX_SIZES = [16, 32, 64, 128, 256, 512];
 const PALETTE_MODES = [
-  { id: '15bit', label: 'PS1 15-bit' },
-  { id: 'preset', label: 'Preset' },
-  { id: 'extract', label: 'From texture' },
-  { id: 'custom', label: 'Custom' },
+  { id: '15bit', label: 'PS1 15-bit', sub: '32,768' },
+  { id: 'clut4', label: '4-bit CLUT', sub: '16 colors' },
+  { id: 'clut8', label: '8-bit CLUT', sub: '256 colors' },
+  { id: 'preset', label: 'Preset', sub: 'fixed list' },
+  { id: 'extract', label: 'From texture', sub: 'pick N' },
+  { id: 'custom', label: 'Custom', sub: 'your colors' },
+];
+const SAMPLING = [
+  { id: 'nearest', label: 'Nearest' },
+  { id: 'box', label: 'Average' },
+  { id: 'edge', label: 'Edge-keep' },
 ];
 const MAX_CUSTOM = 16;
 
@@ -27,8 +35,9 @@ function mkSwitch(id, checked, label) {
 
 const fmtK = n => (n >= 1000 ? `${+(n / 1000).toFixed(1)}k` : String(n));
 
-export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
+export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview } = {}) {
   let metricsOpen = false;
+  let squareLock = true;
 
   function render() {
     const s = store.state;
@@ -36,10 +45,20 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
     const texOn = s.procTexSize !== 'original';
     const palOn = s.procPalette !== 'off';
     const isCustomBudget = !BUDGETS.some(b => b.n === s.procTargetTris);
+    const texSize = String(texOn ? s.procTexSize : s.procTexLast);
+    const [tw, th] = texSize.split('x').map(n => parseInt(n, 10));
+    const isCustomTex = !TEX_SIZES.some(n => String(n) === texSize);
+    const density = s.procTexMode === 'density';
 
     el.innerHTML = `
       <div class="panel">
         <p class="panel-intro">Each step is optional — switch off any you don't need. Changes apply automatically.</p>
+
+        <span class="field-label" id="lbl-target">Start from a target <span class="field-label-note">optional</span></span>
+        <div class="chip-row" role="group" aria-labelledby="lbl-target">
+          ${Object.entries(PROCESS_TARGETS).map(([k, t]) =>
+            `<button class="chip" data-target="${k}" aria-pressed="${s.procTarget === k}">${t.label}</button>`).join('')}
+        </div>
 
         <section class="step ${decOn ? '' : 'is-off'}">
           <header class="step-head">
@@ -91,23 +110,60 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
             ${mkSwitch('sw-tex', texOn, 'Downsample texture')}
           </header>
           <div class="step-body" ${texOn ? '' : 'hidden'}>
-            <span class="field-label" id="lbl-texsize">Texture size</span>
-            <div class="choice-grid cols-6" role="group" aria-labelledby="lbl-texsize">
-              ${TEX_SIZES.map(n => `
-                <button class="choice" data-tex="${n}" aria-pressed="${String(s.procTexSize) === String(n)}">
-                  <span class="choice-main">${n}</span><span class="choice-sub">px</span>
-                </button>`).join('')}
-            </div>
-            ${decOn ? '' : `
             <div class="panel-row">
-              <label>Sampling</label>
+              <label>Size by</label>
               <div class="row-right">
-                <div class="seg-control" id="seg-texfilter-proc">
-                  <button data-val="nearest" class="${s.procTexFilter === 'nearest' ? 'active' : ''}">Nearest</button>
-                  <button data-val="box" class="${s.procTexFilter === 'box' ? 'active' : ''}">Average</button>
+                <div class="seg-control" id="seg-texmode">
+                  <button data-val="fixed" class="${!density ? 'active' : ''}">Pixels</button>
+                  <button data-val="density" class="${density ? 'active' : ''}">Density</button>
                 </div>
               </div>
+            </div>
+            ${density ? `
+            <div class="panel-row">
+              <label for="sl-density">Texels per cm<small class="proc-hint">Same pixel size on every object, at the Export print height (${s.printHeight} mm)</small></label>
+              <div class="row-right">
+                <input type="range" id="sl-density" min="1" max="16" step="0.5" value="${s.procTexDensity}" />
+                <span class="row-value" id="lbl-density">${s.procTexDensity}</span>
+              </div>
+            </div>` : `
+            <div class="choice-grid cols-7" role="group" aria-label="Texture size">
+              ${TEX_SIZES.map(n => `
+                <button class="choice" data-tex="${n}" aria-pressed="${texSize === String(n)}">
+                  <span class="choice-main">${n}</span><span class="choice-sub">px</span>
+                </button>`).join('')}
+              <button class="choice" data-tex="custom" aria-pressed="${isCustomTex}">
+                <span class="choice-main">${isCustomTex ? (tw === th ? tw : `${tw}×${th}`) : '…'}</span><span class="choice-sub">Custom</span>
+              </button>
+            </div>
+            <div class="panel-row" id="row-custom-tex" ${isCustomTex ? '' : 'hidden'}>
+              <label for="num-texw">Width × height</label>
+              <div class="row-right">
+                <input type="number" id="num-texw" min="4" max="2048" step="1" value="${tw}" aria-label="Texture width" />
+                <span class="row-x">×</span>
+                <input type="number" id="num-texh" min="4" max="2048" step="1" value="${th}" aria-label="Texture height" />
+                <label class="lock" for="chk-square" title="Keep square"><input type="checkbox" id="chk-square" ${squareLock && tw === th ? 'checked' : ''} /> square</label>
+              </div>
             </div>`}
+            <span class="field-label">Sampling</span>
+            <div class="seg-control seg-full" id="seg-texfilter-proc">
+              ${SAMPLING.map(m => `<button data-val="${m.id}" class="${s.procTexFilter === m.id ? 'active' : ''}">${m.label}</button>`).join('')}
+            </div>
+            <div class="panel-row">
+              <label for="sl-sat">Saturation</label>
+              <div class="row-right">
+                <input type="range" id="sl-sat" min="0" max="2" step="0.05" value="${s.procSaturation}" />
+                <span class="row-value" id="lbl-sat">${s.procSaturation.toFixed(2)}</span>
+              </div>
+            </div>
+            <div class="panel-row">
+              <label for="sl-con">Contrast</label>
+              <div class="row-right">
+                <input type="range" id="sl-con" min="0.5" max="2" step="0.05" value="${s.procContrast}" />
+                <span class="row-value" id="lbl-con">${s.procContrast.toFixed(2)}</span>
+              </div>
+            </div>
+            ${s.procDecimate ? '<p class="step-note">Rebaked from the original scan, then sampled down to this size.</p>' : ''}
           </div>
         </section>
 
@@ -121,10 +177,10 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
             ${mkSwitch('sw-pal', palOn, 'Reduce palette')}
           </header>
           <div class="step-body" ${palOn ? '' : 'hidden'}>
-            <div class="choice-grid cols-4" role="group" aria-label="Palette mode">
+            <div class="choice-grid choice-grid-top" role="group" aria-label="Palette mode">
               ${PALETTE_MODES.map(m => `
                 <button class="choice choice-compact" data-pal="${m.id}" aria-pressed="${s.procPalette === m.id}">
-                  <span class="choice-main">${m.label}</span>
+                  <span class="choice-main">${m.label}</span><span class="choice-sub">${m.sub}</span>
                 </button>`).join('')}
             </div>
             ${s.procPalette === 'preset' ? `
@@ -145,7 +201,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
               </div>
             </div>` : ''}
             <div class="swatches" id="swatches" aria-label="Palette colors"></div>
-            ${s.procPalette === 'preset' || s.procPalette === 'extract' ? `
+            ${['preset', 'extract', 'clut4'].includes(s.procPalette) ? `
             <button class="btn btn-ghost btn-small" id="btn-tocustom">Edit these colors</button>` : ''}
             <div class="panel-row">
               <label for="sw-procdither">Dither<small class="proc-hint">PS1 4×4 ordered matrix</small></label>
@@ -159,6 +215,14 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
                 <span class="row-value" id="lbl-ditherstr">${s.procDitherStrength.toFixed(2)}</span>
               </div>
             </div>` : ''}
+          </div>
+        </section>
+
+        <section class="result" id="result" aria-label="Result texture">
+          <div class="result-preview"><canvas id="preview" width="1" height="1" aria-label="Final texture preview"></canvas></div>
+          <div class="result-info">
+            <span class="field-label">Result texture</span>
+            <p class="result-line" id="result-line">—</p>
           </div>
         </section>
 
@@ -209,10 +273,40 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
 
     $('#seg-normals').querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => store.set('procFlat', btn.dataset.val === 'flat')));
 
+    el.querySelectorAll('[data-target]').forEach(b => b.addEventListener('click', () => applyTarget(b.dataset.target)));
+
     el.querySelectorAll('[data-tex]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.tex === 'custom') {
+        $('#row-custom-tex').hidden = false;
+        el.querySelectorAll('[data-tex]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        $('#num-texw').focus();
+        return;
+      }
       store.setMany({ procTexLast: b.dataset.tex, procTexSize: b.dataset.tex });
     }));
-    $('#seg-texfilter-proc')?.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => store.set('procTexFilter', btn.dataset.val)));
+    const setCustomTex = (w, h) => {
+      w = Math.min(2048, Math.max(4, w || 64)); h = Math.min(2048, Math.max(4, h || w));
+      const v = w === h ? String(w) : `${w}x${h}`;
+      store.setMany({ procTexLast: v, procTexSize: v });
+    };
+    const nw = $('#num-texw'), nh = $('#num-texh'), sq = $('#chk-square');
+    if (nw) {
+      nw.addEventListener('change', () => setCustomTex(parseInt(nw.value, 10), sq.checked ? parseInt(nw.value, 10) : parseInt(nh.value, 10)));
+      nh.addEventListener('change', () => setCustomTex(sq.checked ? parseInt(nh.value, 10) : parseInt(nw.value, 10), parseInt(nh.value, 10)));
+      sq.addEventListener('change', () => { squareLock = sq.checked; if (squareLock) setCustomTex(parseInt(nw.value, 10), parseInt(nw.value, 10)); });
+    }
+    $('#seg-texmode').querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => store.set('procTexMode', btn.dataset.val)));
+    const slDen = $('#sl-density');
+    if (slDen) {
+      slDen.addEventListener('input', () => { $('#lbl-density').textContent = slDen.value; });
+      slDen.addEventListener('change', () => store.set('procTexDensity', parseFloat(slDen.value)));
+    }
+    for (const [id, lbl, key] of [['#sl-sat', '#lbl-sat', 'procSaturation'], ['#sl-con', '#lbl-con', 'procContrast']]) {
+      const sl = $(id);
+      sl.addEventListener('input', () => { $(lbl).textContent = parseFloat(sl.value).toFixed(2); });
+      sl.addEventListener('change', () => store.set(key, parseFloat(sl.value)));
+    }
+    $('#seg-texfilter-proc').querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => store.set('procTexFilter', btn.dataset.val)));
 
     el.querySelectorAll('[data-pal]').forEach(b => b.addEventListener('click', () => {
       store.setMany({ procPaletteLast: b.dataset.pal, procPalette: b.dataset.pal });
@@ -278,7 +372,9 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
       box.querySelector('#btn-addcolor')?.addEventListener('click', () => store.set('procCustom', [...store.get('procCustom'), '#808080']));
     } else {
       const cols = store.get('procStats')?.palette ?? [];
-      box.innerHTML = cols.map(c => `<span class="swatch" style="background:${c}" title="${c}"></span>`).join('');
+      const shown = cols.slice(0, 32);
+      box.innerHTML = shown.map(c => `<span class="swatch" style="background:${c}" title="${c}"></span>`).join('') +
+        (cols.length > shown.length ? `<span class="swatch-more">+${cols.length - shown.length} more</span>` : '');
     }
   }
 
@@ -288,6 +384,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
     el.classList.toggle('is-busy', !!store.get('procBusy'));
 
     if (!st) {
+      $('#result').hidden = true;
       $('#sum-dec').textContent = 'Load a model to begin';
       $('#sum-tex').textContent = '';
       $('#sum-pal').textContent = '';
@@ -302,7 +399,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
     $('#sum-tex').textContent = !st.texW
       ? 'No texture on this model'
       : s.procTexSize !== 'original'
-        ? `${st.texW}×${st.texH} px${s.procDecimate ? ' · rebaked' : ''}`
+        ? `${st.texW}×${st.texH} px${s.procTexMode === 'density' ? ` · ${s.procTexDensity} texels/cm` : ''}${s.procDecimate ? ' · rebaked' : ''}`
         : `Skipped · ${s.procDecimate ? `rebaked at ${st.texW} px` : `original ${st.texW}×${st.texH} px`}`;
     $('#sum-pal').textContent = !st.texW
       ? 'No texture on this model'
@@ -322,6 +419,29 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
     $('#proc-stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') +
       stages.map(([k, v]) => `<dt class="sub">${k}</dt><dd class="sub">${v} ms</dd>`).join('');
     $('#metrics-hint').textContent = `${st.ms} ms`;
+    renderPreview(st);
+  }
+
+  // Draws the final texture as a conventional image (v up), pixel-exact.
+  function renderPreview(st) {
+    const img = getPreview?.();
+    const cvs = $('#preview');
+    $('#result').hidden = !img;
+    if (!img) return;
+    cvs.width = img.width; cvs.height = img.height;
+    const ctx = cvs.getContext('2d');
+    const id = new ImageData(new Uint8ClampedArray(img.data), img.width, img.height);
+    if (img.flipY) {
+      ctx.putImageData(id, 0, 0);
+    } else {
+      const tmp = document.createElement('canvas');
+      tmp.width = img.width; tmp.height = img.height;
+      tmp.getContext('2d').putImageData(id, 0, 0);
+      ctx.save(); ctx.translate(0, img.height); ctx.scale(1, -1); ctx.drawImage(tmp, 0, 0); ctx.restore();
+    }
+    const parts = [`${img.width}×${img.height} px`, `${st.colors.toLocaleString()} colors`];
+    if (st.coverage != null) parts.push(`${(st.coverage * 100).toFixed(0)}% atlas used`);
+    $('#result-line').textContent = parts.join(' · ');
   }
 
   // Structural settings rebuild the panel; stats only refresh text.
@@ -331,7 +451,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics } = {}) {
     queued = true;
     queueMicrotask(() => { queued = false; render(); });
   };
-  const STRUCTURAL = ['procDecimate', 'procTargetTris', 'procFlat', 'procTexSize', 'procTexFilter', 'procPalette', 'procPreset', 'procColors', 'procCustom', 'procDither', 'procDitherStrength'];
+  const STRUCTURAL = [...PANEL_KEYS.process, 'procTarget', 'printHeight'];
   const unsubs = [
     ...STRUCTURAL.map(k => store.subscribe(k, rerender)),
     store.subscribe('procStats', () => { renderStats(); if (store.get('procPalette') !== 'custom') renderSwatches(); }),

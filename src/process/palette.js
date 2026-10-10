@@ -50,33 +50,70 @@ export function rgbToHex([r, g, b]) {
   return '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
 }
 
-// Nearest-neighbour resample of an RGBA image to the target width.
-export function downsample(src, targetW, method = 'nearest') {
+// Resamples an RGBA image to w×h.
+//   nearest — the source pixel at each target texel centre
+//   box     — average of the source block
+//   edge    — block average, unless a sizeable share of the block is much darker
+//             than the average (outlines, eyes); then those dark pixels win, so
+//             thin dark detail survives heavy reduction
+export function downsample(src, w, h, method = 'nearest') {
   const { data, width: W, height: H } = src;
-  const w = Math.max(1, Math.min(W, targetW));
-  const h = Math.max(1, Math.round(H * w / W));
+  w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
   const out = new Uint8ClampedArray(w * h * 4);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const o = (y * w + x) * 4;
-      if (method === 'box') {
-        const sx0 = Math.floor(x * W / w), sx1 = Math.max(sx0 + 1, Math.floor((x + 1) * W / w));
-        const sy0 = Math.floor(y * H / h), sy1 = Math.max(sy0 + 1, Math.floor((y + 1) * H / h));
-        let r = 0, g = 0, b = 0, a = 0, n = 0;
-        for (let sy = sy0; sy < sy1; sy++) for (let sx = sx0; sx < sx1; sx++) {
-          const i = (sy * W + sx) * 4;
-          r += data[i]; g += data[i + 1]; b += data[i + 2]; a += data[i + 3]; n++;
-        }
-        out[o] = r / n; out[o + 1] = g / n; out[o + 2] = b / n; out[o + 3] = a / n;
-      } else {
+      if (method === 'nearest') {
         const sx = Math.min(W - 1, Math.floor((x + 0.5) * W / w));
         const sy = Math.min(H - 1, Math.floor((y + 0.5) * H / h));
         const i = (sy * W + sx) * 4;
         out[o] = data[i]; out[o + 1] = data[i + 1]; out[o + 2] = data[i + 2]; out[o + 3] = data[i + 3];
+        continue;
       }
+      const sx0 = Math.floor(x * W / w), sx1 = Math.max(sx0 + 1, Math.floor((x + 1) * W / w));
+      const sy0 = Math.floor(y * H / h), sy1 = Math.max(sy0 + 1, Math.floor((y + 1) * H / h));
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let sy = sy0; sy < sy1; sy++) for (let sx = sx0; sx < sx1; sx++) {
+        const i = (sy * W + sx) * 4;
+        r += data[i]; g += data[i + 1]; b += data[i + 2]; a += data[i + 3]; n++;
+      }
+      r /= n; g /= n; b /= n; a /= n;
+      if (method === 'edge' && n > 1) {
+        const meanL = 0.299 * r + 0.587 * g + 0.114 * b;
+        let dr = 0, dg = 0, db = 0, dn = 0;
+        for (let sy = sy0; sy < sy1; sy++) for (let sx = sx0; sx < sx1; sx++) {
+          const i = (sy * W + sx) * 4;
+          if (meanL - (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) > 40) {
+            dr += data[i]; dg += data[i + 1]; db += data[i + 2]; dn++;
+          }
+        }
+        if (dn >= n * 0.15) { r = dr / dn; g = dg / dn; b = db / dn; }
+      }
+      out[o] = r; out[o + 1] = g; out[o + 2] = b; out[o + 3] = a;
     }
   }
   return { data: out, width: w, height: h };
+}
+
+// Saturation and contrast around mid-grey, applied before quantisation.
+export function adjustColor(img, saturation = 1, contrast = 1) {
+  if (saturation === 1 && contrast === 1) return img;
+  const { data } = img;
+  const out = new Uint8ClampedArray(data.length);
+  for (let i = 0; i < data.length; i += 4) {
+    const l = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    for (let c = 0; c < 3; c++) {
+      const v = l + (data[i + c] - l) * saturation;
+      out[i + c] = (v - 128) * contrast + 128;
+    }
+    out[i + 3] = data[i + 3];
+  }
+  return { ...img, data: out };
+}
+
+// Snaps palette entries to the 15-bit grid used by PlayStation CLUTs.
+export function snap15(hexColors) {
+  return [...new Set(hexColors.map(h => rgbToHex(hexToRgb(h).map(v => Math.round(Math.round(v * 31 / 255) * 255 / 31)))))];
 }
 
 // Palette extraction: range-midpoint box splitting (keeps small but distinct

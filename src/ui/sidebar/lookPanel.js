@@ -1,5 +1,5 @@
 import { store } from '../../store.js';
-import { PRESETS, applyPreset } from '../../export/preset.js';
+import { LOOK_PRESETS, applyLook } from '../../export/preset.js';
 import { buildRenderPanel } from './renderPanel.js';
 import { buildEnvironmentPanel } from './environmentPanel.js';
 import { buildCameraPanel } from './cameraPanel.js';
@@ -23,7 +23,7 @@ function mkSwitch(id, checked, label) {
 
 export function buildLookPanel(el, { environment = {}, camera = {}, onRebuild } = {}) {
   const s = store.state;
-  const groups = [...new Set(Object.values(PRESETS).map(p => p.group))];
+  const groups = [...new Set(Object.values(LOOK_PRESETS).map(p => p.group))];
 
   el.innerHTML = `
     <div class="panel">
@@ -37,20 +37,17 @@ export function buildLookPanel(el, { environment = {}, camera = {}, onRebuild } 
         </header>
       </section>
 
-      <span class="panel-section-label">Presets</span>
+      <span class="panel-section-label">Look presets</span>
+      <p class="panel-intro">Presets change only how the model is rendered — your Process steps stay as they are.</p>
       <div class="preset-groups">
         ${groups.map(g => `
           <div class="preset-group">
             <span class="preset-group-label">${g}</span>
             <div class="chip-row">
-              ${Object.entries(PRESETS).filter(([, p]) => p.group === g).map(([k, p]) =>
+              ${Object.entries(LOOK_PRESETS).filter(([, p]) => p.group === g).map(([k, p]) =>
                 `<button class="chip" data-preset="${k}" aria-pressed="${s.lookPreset === k}">${p.label}</button>`).join('')}
             </div>
           </div>`).join('')}
-      </div>
-      <div class="panel-row">
-        <label for="sw-presetproc">Presets also set Process<small class="proc-hint">Triangle budget, texture size and palette</small></label>
-        <div class="row-right">${mkSwitch('sw-presetproc', s.presetSetsProcess, 'Presets also set Process')}</div>
       </div>
 
       <span class="panel-section-label">Fine-tune</span>
@@ -82,15 +79,14 @@ export function buildLookPanel(el, { environment = {}, camera = {}, onRebuild } 
     $('#look-sections').classList.toggle('is-dim', !on);
     $('#sw-look').checked = on;
     $('#look-sum').textContent = on
-      ? (PRESETS[preset] ? `Preset: ${PRESETS[preset].label}` : 'Custom settings')
+      ? (LOOK_PRESETS[preset] ? `Preset: ${LOOK_PRESETS[preset].label}` : 'Custom settings')
       : 'Off — showing plain shading of the model';
     el.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.preset === preset)));
   }
 
   $('#sw-look').addEventListener('change', e => store.set('lookEnabled', e.target.checked));
-  $('#sw-presetproc').addEventListener('change', e => store.set('presetSetsProcess', e.target.checked));
   el.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
-    applyPreset(b.dataset.preset, { includeProcess: store.get('presetSetsProcess') });
+    applyLook(b.dataset.preset);
     rebuild();
   }));
 

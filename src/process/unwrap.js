@@ -1,9 +1,9 @@
 // Normal-clustered planar chart unwrap for low-poly meshes.
 // Faces are grown into charts while their normal stays within `angle` of the
 // chart's area-weighted normal, each chart is projected onto its own plane,
-// and charts are shelf-packed into a texSize×texSize atlas with texel padding.
+// and charts are skyline-packed into a texW×texH atlas with texel padding.
 
-export function unwrap({ positions, indices }, texSize, { angle = 40, padTexels = texSize <= 32 ? 0 : 1, flat = true } = {}) {
+export function unwrap({ positions, indices }, texW, texH = texW, { angle = 40, padTexels = Math.min(texW, texH) <= 32 ? 0 : 1, flat = true } = {}) {
   const nT = indices.length / 3;
   const faceN = new Float32Array(nT * 3);
   const area = new Float32Array(nT);
@@ -21,7 +21,7 @@ export function unwrap({ positions, indices }, texSize, { angle = 40, padTexels 
   const neighbors = buildAdjacency(indices, nT);
   const charts = growCharts(nT, faceN, area, neighbors, Math.cos(angle * Math.PI / 180));
   const projected = charts.map(c => projectChart(c, positions, indices));
-  const placement = pack(projected, texSize, padTexels);
+  const placement = pack(projected, texW, texH, padTexels);
 
   const outPos = new Float32Array(nT * 9);
   const outUV  = new Float32Array(nT * 6);
@@ -29,7 +29,7 @@ export function unwrap({ positions, indices }, texSize, { angle = 40, padTexels 
   const smoothN = flat ? null : vertexNormals(positions, indices, faceN, area);
 
   projected.forEach((pc, ci) => {
-    const { x0, y0, scale, side, rot } = placement[ci];
+    const { x0, y0, scale, sideW, sideH, rot } = placement[ci];
     pc.tris.forEach((t, k) => {
       for (let c = 0; c < 3; c++) {
         const v = indices[t * 3 + c];
@@ -38,8 +38,8 @@ export function unwrap({ positions, indices }, texSize, { angle = 40, padTexels 
         const [u, w] = pc.uv[k * 3 + c];
         let lu = u - pc.minU, lw = w - pc.minV;
         if (rot) [lu, lw] = [pc.h - lw, lu];
-        outUV[o * 2]     = (x0 + lu * scale) / side;
-        outUV[o * 2 + 1] = (y0 + lw * scale) / side;
+        outUV[o * 2]     = (x0 + lu * scale) / sideW;
+        outUV[o * 2 + 1] = (y0 + lw * scale) / sideH;
         const src = smoothN ? smoothN : faceN;
         const si = smoothN ? v : t;
         outN[o * 3] = src[si * 3]; outN[o * 3 + 1] = src[si * 3 + 1]; outN[o * 3 + 2] = src[si * 3 + 2];
@@ -146,24 +146,24 @@ function projectChart({ tris, normal }, positions, indices) {
 }
 
 // Finds the largest uniform texel density at which every chart (plus padding)
-// shelf-packs into the atlas. Falls back to a virtual atlas larger than the
+// packs into the W×H atlas. Falls back to a virtual atlas larger than the
 // texture when even 1-texel charts can't fit (very small textures).
-function pack(charts, texSize, padTexels) {
+function pack(charts, W, H, padTexels) {
   const order = charts.map((_, i) => i).sort((a, b) => charts[b].h - charts[a].h);
 
   // Skyline bottom-left packing; each chart may be turned 90° if that sits lower.
-  const tryPack = (scale, side, pad) => {
+  const tryPack = (scale, sideW, sideH, pad) => {
     const out = new Array(charts.length);
-    const sky = new Int32Array(side);
+    const sky = new Int32Array(sideW);
     for (const i of order) {
       const iw = Math.max(1, Math.ceil(charts[i].w * scale));
       const ih = Math.max(1, Math.ceil(charts[i].h * scale));
       let best = null;
       for (const rot of [false, true]) {
         const cw = (rot ? ih : iw) + pad * 2, ch = (rot ? iw : ih) + pad * 2;
-        if (cw > side) continue;
-        const spot = lowestSpot(sky, side, cw);
-        if (spot.y + ch > side) continue;
+        if (cw > sideW) continue;
+        const spot = lowestSpot(sky, sideW, cw);
+        if (spot.y + ch > sideH) continue;
         if (!best || spot.y + ch < best.y + best.ch) best = { ...spot, cw, ch, rot };
       }
       if (!best) return null;
@@ -174,7 +174,7 @@ function pack(charts, texSize, padTexels) {
       out[i] = {
         x0: best.x + pad + (fw - sw) / 2,
         y0: best.y + pad + (fh - sh) / 2,
-        scale, side, rot: best.rot,
+        scale, sideW, sideH, rot: best.rot,
       };
     }
     return out;
@@ -182,20 +182,20 @@ function pack(charts, texSize, padTexels) {
 
   const maxExtent = Math.max(...charts.map(c => Math.max(c.w, c.h)), 1e-9);
   for (const pad of [padTexels, 0]) {
-    let lo = 0, hi = texSize / maxExtent, best = tryPack(1e-12, texSize, pad);
+    let lo = 0, hi = Math.max(W, H) / maxExtent, best = tryPack(1e-12, W, H, pad);
     if (!best) continue;
     for (let i = 0; i < 24; i++) {
       const mid = (lo + hi) / 2;
-      const res = tryPack(mid, texSize, pad);
+      const res = tryPack(mid, W, H, pad);
       if (res) { best = res; lo = mid; } else hi = mid;
     }
     return best;
   }
 
-  let side = texSize;
+  let k = 1;
   while (true) {
-    side = Math.ceil(side * 1.25);
-    const res = tryPack(1e-12, side, 0);
+    k *= 1.25;
+    const res = tryPack(1e-12, Math.ceil(W * k), Math.ceil(H * k), 0);
     if (res) return res;
   }
 }

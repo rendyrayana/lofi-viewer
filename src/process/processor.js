@@ -2,9 +2,29 @@ import * as THREE from 'three';
 import { weldPositions, decimate } from './decimate.js';
 import { unwrap } from './unwrap.js';
 import { makeSampler, prepareSource, bake } from './bake.js';
-import { downsample, quantize15, quantizeToPalette, extractPalette, PALETTE_PRESETS, countColors } from './palette.js';
+import { downsample, adjustColor, snap15, quantize15, quantizeToPalette, extractPalette, PALETTE_PRESETS, countColors } from './palette.js';
 
 const DECIMATED_DEFAULT_TEX = 512;
+const BAKE_MAX = 512;           // supersampled bake resolution cap (per side)
+const ASSUMED_UV_COVERAGE = 0.5; // share of the atlas covered by charts, for density sizing
+
+// 'original' | '128' | '128x64' → { w, h } (null for original)
+export function parseTexSize(v) {
+  if (v == null || v === 'original') return null;
+  const [w, h] = String(v).split('x').map(n => parseInt(n, 10));
+  return { w, h: h || w };
+}
+
+function meshArea(positions, indices) {
+  let a = 0;
+  for (let t = 0; t < indices.length; t += 3) {
+    const i = indices[t] * 3, j = indices[t + 1] * 3, k = indices[t + 2] * 3;
+    const ux = positions[j] - positions[i], uy = positions[j + 1] - positions[i + 1], uz = positions[j + 2] - positions[i + 2];
+    const vx = positions[k] - positions[i], vy = positions[k + 1] - positions[i + 1], vz = positions[k + 2] - positions[i + 2];
+    a += Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
+  }
+  return a;
+}
 
 // Stage 1 (geometry) → Stage 2 (texture) → palette, per mesh, with each
 // stage cached so cheap changes (palette, dither) don't redo expensive ones.
@@ -86,9 +106,8 @@ export class ModelProcessor {
       return r;
     };
     const totalSrc = this.entries.reduce((s, e) => s + e.srcTris, 0) || 1;
-    const N = opts.texSize === 'original'
-      ? (opts.decimate ? DECIMATED_DEFAULT_TEX : null)
-      : parseInt(opts.texSize, 10);
+    const texOn = opts.texSize !== 'original';
+    const cmPerUnit = opts.texMode === 'density' ? this._cmPerUnit(opts.printHeight) : 0;
     let tris = 0, charts = 0, texW = 0, texH = 0, coverage = null;
     const images = [];
 
@@ -107,24 +126,37 @@ export class ModelProcessor {
           c.unwraps = {};
           c.bakes = {};
         }
-        const uk = `${N}|${opts.flat}`;
-        if (!c.unwraps[uk]) c.unwraps[uk] = await time('unwrap', () => unwrap(c.low, N, { flat: opts.flat }));
+      }
+
+      const size = this._targetSize(e, opts, texOn, cmPerUnit, hasTex);
+
+      if (opts.decimate) {
+        const uk = `${size.w}x${size.h}|${opts.flat}`;
+        if (!c.unwraps[uk]) c.unwraps[uk] = await time('unwrap', () => unwrap(c.low, size.w, size.h, { flat: opts.flat }));
         const low = c.unwraps[uk];
         geo = buildGeometry(low);
         charts += low.chartCount;
         if (hasTex) {
           if (!c.source) c.source = await time('bvh', () => prepareSource(e.srcGeo));
+          // Supersample the bake so every sampling method has detail to work with.
+          const ss = Math.max(1, Math.min(4, Math.floor(BAKE_MAX / Math.max(size.w, size.h))));
+          const bk = `${uk}|${ss}`;
           c.bakes ??= {};
-          if (!c.bakes[uk]) c.bakes[uk] = await time('bake', () => bake(low, c.source, c.sampler, N));
-          img = c.bakes[uk];
-          coverage = img.coverage;
+          if (!c.bakes[bk]) c.bakes[bk] = await time('bake', () => bake(low, c.source, c.sampler, size.w * ss, size.h * ss));
+          const hi = c.bakes[bk];
+          coverage = hi.coverage;
+          img = ss > 1 ? await time('downsample', () => downsample(hi, size.w, size.h, opts.texFilter)) : hi;
           flipY = false;
           baked = true;
         }
       } else if (hasTex) {
         const full = { data: c.sampler.data, width: c.sampler.width, height: c.sampler.height };
-        img = N ? await time('downsample', () => downsample(full, N, opts.texFilter)) : full;
+        img = texOn ? await time('downsample', () => downsample(full, size.w, size.h, opts.texFilter)) : full;
         flipY = c.sampler.flipY;
+      }
+
+      if (img && texOn && (opts.saturation !== 1 || opts.contrast !== 1)) {
+        img = await time('adjust', () => adjustColor(img, opts.saturation, opts.contrast));
       }
 
       tris += (geo.index ? geo.index.count : geo.attributes.position.count) / 3;
@@ -159,6 +191,33 @@ export class ModelProcessor {
     };
   }
 
+  // Centimetres per model unit, so the model's height equals the print height.
+  _cmPerUnit(printHeightMm) {
+    const box = new THREE.Box3();
+    for (const e of this.entries) {
+      e.srcGeo.computeBoundingBox();
+      box.union(e.srcGeo.boundingBox);
+    }
+    const h = box.max.y - box.min.y;
+    return h > 0 ? (printHeightMm / 10) / h : 0;
+  }
+
+  // Texture size for one mesh: fixed (possibly non-square), or derived from a
+  // texel density so every object gets the same texels per centimetre.
+  _targetSize(e, opts, texOn, cmPerUnit, hasTex) {
+    if (texOn && opts.texMode === 'density' && cmPerUnit > 0) {
+      const c = e.cache;
+      const mesh = opts.decimate ? c.low : (c.welded ??= weldPositions(e.srcGeo));
+      const areaCm2 = meshArea(mesh.positions, mesh.indices) * cmPerUnit * cmPerUnit;
+      const side = Math.sqrt(areaCm2 / ASSUMED_UV_COVERAGE) * opts.texDensity;
+      const n = Math.min(1024, Math.max(8, Math.round(side)));
+      return { w: n, h: n };
+    }
+    if (texOn) return parseTexSize(opts.texSize);
+    if (opts.decimate) return { w: DECIMATED_DEFAULT_TEX, h: DECIMATED_DEFAULT_TEX };
+    return hasTex ? { w: e.cache.sampler.width, h: e.cache.sampler.height } : { w: 0, h: 0 };
+  }
+
   _apply(e, opts) {
     const untouched = !opts.decimate && opts.texSize === 'original' && opts.palette === 'off';
     const mat = e.mesh.material;
@@ -186,6 +245,11 @@ export class ModelProcessor {
 }
 
 function resolvePalette(opts, images) {
+  if (opts.palette === 'clut4' || opts.palette === 'clut8') {
+    if (!images.length) return [];
+    const data = images.length === 1 ? images[0].data : concat(images.map(i => i.data));
+    return snap15(extractPalette({ data }, opts.palette === 'clut4' ? 16 : 256));
+  }
   if (opts.palette === 'preset') return PALETTE_PRESETS[opts.preset]?.colors ?? [];
   if (opts.palette === 'custom') return opts.custom.length ? opts.custom : ['#000000'];
   if (opts.palette === 'extract' && images.length) {

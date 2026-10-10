@@ -42,15 +42,15 @@ export function prepareSource(geometry) {
 // along the low-poly face normal (both directions, within a cage of `cage` ×
 // model size) and copy the texture colour found there. Rays that miss — e.g.
 // over holes in the scan — fall back to the closest surface point.
-export function bake(low, source, sampler, size, { cage = 0.03 } = {}) {
+export function bake(low, source, sampler, width, height = width, { cage = 0.03 } = {}) {
   const { geo, bvh, diag } = source;
   const maxDist = diag * cage;
   const ray = new THREE.Ray();
   const faceN = new THREE.Vector3();
   let rayHits = 0, samples = 0;
   const idx = geo.index.array, pos = geo.attributes.position, uvA = geo.attributes.uv;
-  const px = new Uint8ClampedArray(size * size * 4);
-  const filled = new Uint8Array(size * size);
+  const px = new Uint8ClampedArray(width * height * 4);
+  const filled = new Uint8Array(width * height);
   const hit = { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
   const P = new THREE.Vector3(), A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
   const bary = new THREE.Vector3();
@@ -99,15 +99,15 @@ export function bake(low, source, sampler, size, { cage = 0.03 } = {}) {
       (p[q + 3] - p[q])     * (p[q + 7] - p[q + 1]) - (p[q + 4] - p[q + 1]) * (p[q + 6] - p[q]),
     ).normalize();
     const uv = low.uv, o = t * 6;
-    const x0 = uv[o] * size, y0 = uv[o + 1] * size;
-    const x1 = uv[o + 2] * size, y1 = uv[o + 3] * size;
-    const x2 = uv[o + 4] * size, y2 = uv[o + 5] * size;
+    const x0 = uv[o] * width, y0 = uv[o + 1] * height;
+    const x1 = uv[o + 2] * width, y1 = uv[o + 3] * height;
+    const x2 = uv[o + 4] * width, y2 = uv[o + 5] * height;
     const det = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
     let wrote = false;
 
     if (Math.abs(det) > 1e-12) {
-      const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2))), maxX = Math.min(size - 1, Math.ceil(Math.max(x0, x1, x2)));
-      const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2))), maxY = Math.min(size - 1, Math.ceil(Math.max(y0, y1, y2)));
+      const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2))), maxX = Math.min(width - 1, Math.ceil(Math.max(x0, x1, x2)));
+      const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2))), maxY = Math.min(height - 1, Math.ceil(Math.max(y0, y1, y2)));
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
           const cx = x + 0.5, cy = y + 0.5;
@@ -115,7 +115,7 @@ export function bake(low, source, sampler, size, { cage = 0.03 } = {}) {
           const l1 = ((y2 - y0) * (cx - x2) + (x0 - x2) * (cy - y2)) / det;
           const l2 = 1 - l0 - l1;
           if (l0 < -1e-4 || l1 < -1e-4 || l2 < -1e-4) continue;
-          sampleAt(l0, l1, l2, t, y * size + x);
+          sampleAt(l0, l1, l2, t, y * width + x);
           wrote = true;
         }
       }
@@ -123,16 +123,16 @@ export function bake(low, source, sampler, size, { cage = 0.03 } = {}) {
 
     // Triangles smaller than a texel still claim the texel under their centroid.
     if (!wrote) {
-      const tx = Math.min(size - 1, Math.max(0, Math.floor((x0 + x1 + x2) / 3)));
-      const ty = Math.min(size - 1, Math.max(0, Math.floor((y0 + y1 + y2) / 3)));
-      if (!filled[ty * size + tx]) sampleAt(1 / 3, 1 / 3, 1 / 3, t, ty * size + tx);
+      const tx = Math.min(width - 1, Math.max(0, Math.floor((x0 + x1 + x2) / 3)));
+      const ty = Math.min(height - 1, Math.max(0, Math.floor((y0 + y1 + y2) / 3)));
+      if (!filled[ty * width + tx]) sampleAt(1 / 3, 1 / 3, 1 / 3, t, ty * width + tx);
     }
   }
 
   let covered = 0;
   for (let i = 0; i < filled.length; i++) covered += filled[i];
-  dilate(px, filled, size, size, Math.max(2, Math.ceil(size / 32)));
-  return { data: px, width: size, height: size, coverage: covered / (size * size), rayHitRate: samples ? rayHits / samples : 1 };
+  dilate(px, filled, width, height, Math.max(2, Math.ceil(Math.max(width, height) / 32)));
+  return { data: px, width, height, coverage: covered / (width * height), rayHitRate: samples ? rayHits / samples : 1 };
 }
 
 // Grows chart colours into the padding so nearest sampling at chart edges

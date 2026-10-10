@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { PRESETS } from '../export/preset.js';
+import { LOOK_PRESETS } from '../export/preset.js';
 
 // One-line summary of the whole pipeline. Each stage is a button that opens
 // the tab where it is configured; the right side reports load/processing
@@ -39,11 +39,11 @@ export function buildPipelineBar(el) {
       setStage('#pv-scan', `${st.srcTris.toLocaleString()} tris`);
       setStage('#pv-dec', s.procDecimate ? `${st.tris.toLocaleString()} tris` : 'skipped', !s.procDecimate);
       const texOn = s.procTexSize !== 'original';
-      setStage('#pv-tex', !st.texW ? 'none' : texOn ? `${st.texW} px` : 'skipped', !texOn || !st.texW);
+      setStage('#pv-tex', !st.texW ? 'none' : texOn ? (st.texW === st.texH ? `${st.texW} px` : `${st.texW}×${st.texH}`) : 'skipped', !texOn || !st.texW);
       const palOn = s.procPalette !== 'off';
       setStage('#pv-pal', !st.texW ? 'none' : palOn ? `${st.colors.toLocaleString()} colors` : 'skipped', !palOn || !st.texW);
     }
-    setStage('#pv-look', !s.lookEnabled ? 'off' : (PRESETS[s.lookPreset]?.label ?? 'custom'), !s.lookEnabled);
+    setStage('#pv-look', !s.lookEnabled ? 'off' : (LOOK_PRESETS[s.lookPreset]?.label ?? 'custom'), !s.lookEnabled);
   }
 
   let flashTimer = null;

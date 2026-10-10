@@ -43,65 +43,57 @@ export function loadPresetFromURL() {
   } catch {}
 }
 
-// Look presets. Each one starts from the defaults (see applyPreset) so no
-// setting leaks over from the previously chosen preset. Triangle budgets and
-// texture sizes are typical per-character values for each platform.
-export const PRESETS = {
-  ps1: {
-    label: 'PlayStation', group: 'Console',
+// Look presets change only how the model is rendered (resolution, snapping,
+// texture warp, dither, lighting, display effects). They never touch the
+// mesh, texture or palette set up in Process. Each starts from the defaults so
+// nothing leaks over from the previously chosen preset.
+export const LOOK_PRESETS = {
+  ps1Crt: {
+    label: 'PS1 on CRT', group: 'Console',
     settings: {
-      procDecimate: true, procTargetTris: 800, procFlat: false, procTexSize: '128', procPalette: '15bit', procDither: true,
       renderScale: 0.25, vertexSnap: true, snapPrecision: 64, colorDepth: '15bit', ditherPattern: 'bayer4',
       affineWarp: true, textureFilter: 'nearest',
       crtCurvature: 0.1, scanlines: 0.4, scanlineOpacity: 0.25, vignette: 0.3, chromaticAberration: 0.1, filmGrain: 0.05,
     },
   },
   ps1Clean: {
-    label: 'PlayStation (no CRT)', group: 'Console',
+    label: 'PS1 clean', group: 'Console',
     settings: {
-      procDecimate: true, procTargetTris: 800, procFlat: false, procTexSize: '128', procPalette: '15bit', procDither: true,
       renderScale: 0.25, vertexSnap: true, snapPrecision: 64, colorDepth: '15bit', ditherPattern: 'bayer4',
       affineWarp: true, textureFilter: 'nearest',
     },
   },
   n64: {
-    label: 'Nintendo 64', group: 'Console',
+    label: 'N64 soft', group: 'Console',
     settings: {
-      procDecimate: true, procTargetTris: 700, procFlat: false, procTexSize: '64', procPalette: '15bit', procDither: true,
       renderScale: 0.3, vertexSnap: false, colorDepth: '15bit', ditherPattern: 'bayer2',
-      affineWarp: false, textureFilter: 'linear',
-      fogDensity: 0.02, vignette: 0.15,
+      affineWarp: false, textureFilter: 'linear', fogDensity: 0.02, vignette: 0.15,
     },
   },
   saturn: {
-    label: 'Sega Saturn', group: 'Console',
+    label: 'Saturn', group: 'Console',
     settings: {
-      procDecimate: true, procTargetTris: 600, procFlat: true, procTexSize: '64', procPalette: '15bit', procDither: false,
       renderScale: 0.25, vertexSnap: true, snapPrecision: 48, colorDepth: '15bit', ditherPattern: 'none',
-      affineWarp: true, textureFilter: 'nearest',
-      scanlines: 0.4, scanlineOpacity: 0.2, vignette: 0.2,
+      affineWarp: true, textureFilter: 'nearest', scanlines: 0.4, scanlineOpacity: 0.2, vignette: 0.2,
     },
   },
   dreamcast: {
-    label: 'Sega Dreamcast', group: 'Console',
+    label: 'Dreamcast VGA', group: 'Console',
     settings: {
-      procDecimate: true, procTargetTris: 3000, procFlat: false, procTexSize: '256', procPalette: '15bit', procDither: true,
       renderScale: 0.6, vertexSnap: false, colorDepth: '15bit', ditherPattern: 'bayer2',
       affineWarp: false, textureFilter: 'linear',
     },
   },
   dos: {
-    label: 'DOS / VGA (Quake era)', group: 'Console',
+    label: 'DOS VGA', group: 'Console',
     settings: {
-      procDecimate: true, procTargetTris: 400, procFlat: true, procTexSize: '128', procPalette: 'extract', procColors: 32, procDither: false,
       renderScale: 0.3, vertexSnap: false, colorDepth: '24bit', ditherPattern: 'none',
       affineWarp: false, textureFilter: 'nearest',
     },
   },
-  gameboy: {
-    label: 'Game Boy', group: 'Handheld',
+  handheld: {
+    label: 'Handheld LCD', group: 'Handheld',
     settings: {
-      procDecimate: true, procTargetTris: 300, procFlat: true, procTexSize: '32', procPalette: 'preset', procPreset: 'gameboy', procDither: true,
       renderScale: 0.15, vertexSnap: true, snapPrecision: 32, colorDepth: '24bit', ditherPattern: 'none',
       textureFilter: 'nearest', bgColor: '#9bbc0f', ambientIntensity: 0.9, keyLightIntensity: 0.4,
     },
@@ -109,28 +101,24 @@ export const PRESETS = {
   virtualBoy: {
     label: 'Virtual Boy', group: 'Handheld',
     settings: {
-      procDecimate: true, procTargetTris: 300, procFlat: true, procTexSize: '32', procPalette: 'preset', procPreset: 'virtualBoy', procDither: true,
       renderScale: 0.2, vertexSnap: true, snapPrecision: 32, colorDepth: '24bit', ditherPattern: 'none',
-      textureFilter: 'nearest', bgColor: '#000000', ambientIntensity: 0.9, keyLightIntensity: 0.4, scanlines: 0.5, scanlineOpacity: 0.3,
+      textureFilter: 'nearest', bgColor: '#000000', ambientIntensity: 0.9, keyLightIntensity: 0.4,
+      scanlines: 0.5, scanlineOpacity: 0.3,
     },
   },
   pico8: {
-    label: 'PICO-8', group: 'Fantasy',
+    label: 'PICO-8', group: 'Handheld',
     settings: {
-      procDecimate: true, procTargetTris: 300, procFlat: true, procTexSize: '32', procPalette: 'preset', procPreset: 'pico8', procDither: true,
       renderScale: 0.12, vertexSnap: true, snapPrecision: 32, colorDepth: '24bit', ditherPattern: 'none',
       textureFilter: 'nearest', bgColor: '#1d2b53',
     },
   },
-  filament: {
-    label: 'Print: Bambu PLA Basic', group: 'Fabrication',
-    settings: {
-      procDecimate: true, procTargetTris: 1500, procFlat: true, procTexSize: '128', procPalette: 'preset', procPreset: 'bambuBasic', procDither: false,
-      renderScale: 0.5, vertexSnap: false, colorDepth: '24bit', ditherPattern: 'none', textureFilter: 'nearest',
-    },
+  clean: {
+    label: 'Clean', group: 'Neutral',
+    settings: { renderScale: 0.6, colorDepth: '24bit', ditherPattern: 'none', textureFilter: 'nearest' },
   },
   horror: {
-    label: 'Horror Night', group: 'Mood',
+    label: 'Horror night', group: 'Mood',
     settings: {
       renderScale: 0.2, vertexSnap: true, snapPrecision: 48, colorDepth: '15bit',
       ditherPattern: 'bayer4', affineWarp: true, textureFilter: 'nearest',
@@ -140,7 +128,7 @@ export const PRESETS = {
     },
   },
   retro: {
-    label: 'Retro Arcade', group: 'Mood',
+    label: 'Retro arcade', group: 'Mood',
     settings: {
       renderScale: 0.25, vertexSnap: true, snapPrecision: 96, colorDepth: '15bit',
       ditherPattern: 'bayer4', affineWarp: true, textureFilter: 'nearest',
@@ -151,28 +139,49 @@ export const PRESETS = {
   },
 };
 
+// Process targets: era-typical per-model budgets. They only fill in the
+// Process steps, where every value stays visible and editable.
+export const PROCESS_TARGETS = {
+  ps1:       { label: 'PS1',       settings: { procDecimate: true, procTargetTris: 800,  procTexSize: '128', procTexMode: 'fixed', procPalette: 'clut4', procDither: true } },
+  n64:       { label: 'N64',       settings: { procDecimate: true, procTargetTris: 1500, procTexSize: '64',  procTexMode: 'fixed', procPalette: '15bit', procDither: true } },
+  saturn:    { label: 'Saturn',    settings: { procDecimate: true, procTargetTris: 800,  procTexSize: '64',  procTexMode: 'fixed', procPalette: '15bit', procDither: false } },
+  dreamcast: { label: 'Dreamcast', settings: { procDecimate: true, procTargetTris: 3000, procTexSize: '256', procTexMode: 'fixed', procPalette: '15bit', procDither: true } },
+  dos:       { label: 'DOS',       settings: { procDecimate: true, procTargetTris: 300,  procTexSize: '128x64', procTexMode: 'fixed', procPalette: 'extract', procColors: 32, procDither: false } },
+  gameboy:   { label: 'Game Boy',  settings: { procDecimate: true, procTargetTris: 300,  procTexSize: '32',  procTexMode: 'fixed', procPalette: 'preset', procPreset: 'gameboy', procDither: true } },
+  pico8:     { label: 'PICO-8',    settings: { procDecimate: true, procTargetTris: 300,  procTexSize: '32',  procTexMode: 'fixed', procPalette: 'preset', procPreset: 'pico8', procDither: true } },
+  print:     { label: '3D print',  settings: { procDecimate: true, procTargetTris: 1500, procTexSize: '128', procTexMode: 'fixed', procPalette: 'preset', procPreset: 'bambuBasic', procDither: false } },
+};
+
 const LOOK_KEYS = [
-  'procDecimate', 'procTargetTris', 'procFlat', 'procTexSize', 'procTexFilter', 'procPalette', 'procPreset', 'procColors', 'procDither', 'procDitherStrength',
   'renderScale', 'vertexSnap', 'snapPrecision', 'colorDepth', 'ditherPattern', 'affineWarp', 'textureFilter',
   'bgColor', 'ambientIntensity', 'keyLightIntensity', 'lightColor', 'exposure', 'fogDensity', 'fogColor',
   'crtCurvature', 'scanlines', 'scanlineOpacity', 'vignette', 'chromaticAberration', 'filmGrain', 'colorGrade', 'bloom', 'bloomIntensity',
 ];
+const TARGET_KEYS = [...new Set(Object.values(PROCESS_TARGETS).flatMap(t => Object.keys(t.settings)))];
 
 let applying = false;
 
-// With includeProcess off, only the rendering look changes; the mesh,
-// texture and palette processing stay as the user set them.
-export function applyPreset(name, { includeProcess = true } = {}) {
-  const p = PRESETS[name];
+export function applyLook(name) {
+  const p = LOOK_PRESETS[name];
   if (!p) return;
-  const keep = k => includeProcess || !k.startsWith('proc');
-  const base = Object.fromEntries(LOOK_KEYS.filter(keep).map(k => [k, defaults[k]]));
-  const settings = Object.fromEntries(Object.entries(p.settings).filter(([k]) => keep(k)));
+  const base = Object.fromEntries(LOOK_KEYS.map(k => [k, defaults[k]]));
   applying = true;
-  try { store.setMany({ ...base, ...settings, lookPreset: name, lookEnabled: true }); } finally { applying = false; }
+  try { store.setMany({ ...base, ...p.settings, lookPreset: name, lookEnabled: true }); } finally { applying = false; }
 }
 
-// Any manual change to a look setting turns the preset selector to "Custom".
+export function applyTarget(name) {
+  const t = PROCESS_TARGETS[name];
+  if (!t) return;
+  const extra = {};
+  if (t.settings.procTexSize) extra.procTexLast = t.settings.procTexSize;
+  if (t.settings.procPalette) extra.procPaletteLast = t.settings.procPalette;
+  applying = true;
+  try { store.setMany({ ...t.settings, ...extra, procTarget: name }); } finally { applying = false; }
+}
+
+// Manual changes turn the matching selector back to "custom".
 store.subscribe('*', key => {
-  if (!applying && LOOK_KEYS.includes(key) && store.get('lookPreset') !== 'custom') store.set('lookPreset', 'custom');
+  if (applying) return;
+  if (LOOK_KEYS.includes(key) && store.get('lookPreset') !== 'custom') store.set('lookPreset', 'custom');
+  if (TARGET_KEYS.includes(key) && store.get('procTarget') !== 'custom') store.set('procTarget', 'custom');
 });

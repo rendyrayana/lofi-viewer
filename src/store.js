@@ -2,7 +2,7 @@ const defaults = {
   activeTab: 'import',
   lookPreset: 'custom',
   lookEnabled: true,
-  presetSetsProcess: true,
+  procTarget: 'custom',
   loadBusy: false,
   loadMs: null,
   inverted: false,
@@ -16,6 +16,10 @@ const defaults = {
   procFlat: true,
   procTexSize: 'original',
   procTexFilter: 'nearest',
+  procTexMode: 'fixed',
+  procTexDensity: 4,
+  procSaturation: 1.0,
+  procContrast: 1.0,
   procPalette: 'off',
   procPreset: 'bambuBasic',
   procColors: 8,
@@ -79,7 +83,7 @@ const defaults = {
 export { defaults };
 
 export const PANEL_KEYS = {
-  process: ['procDecimate','procTargetTris','procFlat','procTexSize','procTexFilter','procPalette','procPreset','procColors','procCustom','procDither','procDitherStrength'],
+  process: ['procDecimate','procTargetTris','procFlat','procTexSize','procTexFilter','procTexMode','procTexDensity','procSaturation','procContrast','procPalette','procPreset','procColors','procCustom','procDither','procDitherStrength'],
   render: ['renderScale','vertexSnap','snapPrecision','colorDepth','ditherPattern','affineWarp','textureFilter','wireframe','backfaceCulling','showGrid'],
   environment: ['bgType','bgColor','bgGradientColor','ambientIntensity','keyLightIntensity','lightColor','exposure','fogDensity','fogColor'],
   effects: ['crtCurvature','scanlines','scanlineOpacity','vignette','chromaticAberration','filmGrain','colorGrade','bloom','bloomIntensity'],
