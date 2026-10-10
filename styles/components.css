@@ -776,3 +776,23 @@ input[type="number"]:focus { outline: 1px solid var(--c-text-dim); }
 .seg-full { display: flex; width: 100%; }
 .seg-full button { flex: 1; }
 .swatch-more { align-self: center; font-family: 'Space Mono', monospace; font-size: 10px; color: var(--c-text-faint); }
+
+/* ── Sub-tabs (Look sections) ────────────────────────────────────────────── */
+.subtabs { margin-top: 14px; }
+.subtab-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--c-border-strong); border-radius: 6px; overflow: hidden;
+}
+.subtab-strip [role="tab"] {
+  padding: 8px 2px;
+  background: transparent; border: none;
+  color: var(--c-text-dim);
+  font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.subtab-strip [role="tab"] + [role="tab"] { border-left: 1px solid var(--c-border-strong); }
+.subtab-strip [role="tab"]:hover { color: var(--c-text); background: var(--c-panel-alt); }
+.subtab-strip [role="tab"][aria-selected="true"] { background: var(--c-accent); color: var(--c-bg); font-weight: 600; }
+.subtab-body > .panel { padding: 0; }
+.subtabs.is-dim .subtab-body { opacity: 0.55; }

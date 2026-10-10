@@ -50,7 +50,7 @@ export function buildRenderPanel(el, { onReset } = {}) {
       </div>
 
       <div class="panel-row">
-        <label for="sel-dither">Dither Pattern</label>
+        <label for="sel-dither">Screen Dither<small class="proc-hint">On the rendered image, not the texture</small></label>
         <div class="row-right">
           <select id="sel-dither">
             <option value="bayer4" ${s.ditherPattern === 'bayer4' ? 'selected' : ''}>Bayer 4×4</option>

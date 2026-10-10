@@ -6,12 +6,12 @@ import { buildCameraPanel } from './cameraPanel.js';
 import { buildEffectsPanel } from './effectsPanel.js';
 
 const SECTIONS = [
-  { id: 'render', label: 'Render', hint: 'Resolution, vertex snap, dither, texture warp' },
-  { id: 'environment', label: 'Environment', hint: 'Background, lights, fog' },
-  { id: 'camera', label: 'Camera', hint: 'Projection, FOV, turntable, aspect' },
-  { id: 'effects', label: 'Effects', hint: 'CRT, scanlines, grain, bloom' },
+  { id: 'render', label: 'Render', build: buildRenderPanel },
+  { id: 'environment', label: 'Environment', build: buildEnvironmentPanel },
+  { id: 'camera', label: 'Camera', build: buildCameraPanel },
+  { id: 'effects', label: 'Effects', build: buildEffectsPanel },
 ];
-const openSections = new Set(['render']);
+let activeSection = 'render';
 
 function mkSwitch(id, checked, label) {
   return `
@@ -35,41 +35,43 @@ export function buildLookPanel(el, { environment = {}, camera = {}, onRebuild } 
           </div>
           ${mkSwitch('sw-look', s.lookEnabled, 'Retro look on or off')}
         </header>
+        <div class="step-body">
+          <div class="panel-row">
+            <label for="sel-look-preset">Preset<small class="proc-hint">Changes rendering only — Process stays as set</small></label>
+            <div class="row-right">
+              <select id="sel-look-preset">
+                <option value="custom" ${s.lookPreset === 'custom' ? 'selected' : ''}>Custom</option>
+                ${groups.map(g => `
+                  <optgroup label="${g}">
+                    ${Object.entries(LOOK_PRESETS).filter(([, p]) => p.group === g).map(([k, p]) =>
+                      `<option value="${k}" ${s.lookPreset === k ? 'selected' : ''}>${p.label}</option>`).join('')}
+                  </optgroup>`).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <span class="panel-section-label">Look presets</span>
-      <p class="panel-intro">Presets change only how the model is rendered — your Process steps stay as they are.</p>
-      <div class="preset-groups">
-        ${groups.map(g => `
-          <div class="preset-group">
-            <span class="preset-group-label">${g}</span>
-            <div class="chip-row">
-              ${Object.entries(LOOK_PRESETS).filter(([, p]) => p.group === g).map(([k, p]) =>
-                `<button class="chip" data-preset="${k}" aria-pressed="${s.lookPreset === k}">${p.label}</button>`).join('')}
-            </div>
-          </div>`).join('')}
-      </div>
-
-      <span class="panel-section-label">Fine-tune</span>
-      <div class="look-sections ${s.lookEnabled ? '' : 'is-dim'}" id="look-sections">
+      <div class="subtabs ${s.lookEnabled ? '' : 'is-dim'}" id="look-sections">
+        <div class="subtab-strip" role="tablist" aria-label="Look settings">
+          ${SECTIONS.map(sec => `
+            <button role="tab" id="tab-${sec.id}" aria-controls="look-${sec.id}" aria-selected="${sec.id === activeSection}" data-sec="${sec.id}">${sec.label}</button>`).join('')}
+        </div>
         ${SECTIONS.map(sec => `
-          <details class="fold" data-sec="${sec.id}" ${openSections.has(sec.id) ? 'open' : ''}>
-            <summary><span class="fold-title">${sec.label}</span><span class="fold-hint">${sec.hint}</span></summary>
-            <div class="fold-body" id="look-${sec.id}"></div>
-          </details>`).join('')}
+          <div class="subtab-body" role="tabpanel" id="look-${sec.id}" aria-labelledby="tab-${sec.id}" ${sec.id === activeSection ? '' : 'hidden'}></div>`).join('')}
       </div>
     </div>
   `;
 
   const $ = q => el.querySelector(q);
   const rebuild = () => onRebuild?.();
-  buildRenderPanel($('#look-render'), { onReset: rebuild });
-  buildEnvironmentPanel($('#look-environment'), { ...environment, onReset: rebuild });
-  buildCameraPanel($('#look-camera'), { ...camera, onReset: rebuild });
-  buildEffectsPanel($('#look-effects'), { onReset: rebuild });
+  const extra = { environment, camera };
+  for (const sec of SECTIONS) sec.build($(`#look-${sec.id}`), { ...(extra[sec.id] || {}), onReset: rebuild });
 
-  el.querySelectorAll('details.fold').forEach(d => d.addEventListener('toggle', () => {
-    if (d.open) openSections.add(d.dataset.sec); else openSections.delete(d.dataset.sec);
+  el.querySelectorAll('.subtab-strip [role="tab"]').forEach(tab => tab.addEventListener('click', () => {
+    activeSection = tab.dataset.sec;
+    el.querySelectorAll('.subtab-strip [role="tab"]').forEach(t => t.setAttribute('aria-selected', String(t === tab)));
+    el.querySelectorAll('.subtab-body').forEach(b => { b.hidden = b.id !== `look-${activeSection}`; });
   }));
 
   function sync() {
@@ -78,17 +80,18 @@ export function buildLookPanel(el, { environment = {}, camera = {}, onRebuild } 
     $('#look-master').classList.toggle('is-off', !on);
     $('#look-sections').classList.toggle('is-dim', !on);
     $('#sw-look').checked = on;
+    $('#sel-look-preset').value = LOOK_PRESETS[preset] ? preset : 'custom';
     $('#look-sum').textContent = on
-      ? (LOOK_PRESETS[preset] ? `Preset: ${LOOK_PRESETS[preset].label}` : 'Custom settings')
+      ? (LOOK_PRESETS[preset] ? LOOK_PRESETS[preset].label : 'Custom settings')
       : 'Off — showing plain shading of the model';
-    el.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.preset === preset)));
   }
 
   $('#sw-look').addEventListener('change', e => store.set('lookEnabled', e.target.checked));
-  el.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
-    applyLook(b.dataset.preset);
+  $('#sel-look-preset').addEventListener('change', e => {
+    if (e.target.value === 'custom') return;
+    applyLook(e.target.value);
     rebuild();
-  }));
+  });
 
   const unsubs = [store.subscribe('lookEnabled', sync), store.subscribe('lookPreset', sync)];
   sync();

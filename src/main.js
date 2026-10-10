@@ -63,7 +63,7 @@ function addDefaultCube() {
 addDefaultCube();
 
 // ── UI ────────────────────────────────────────────────────────────────────────
-buildTopbar(document.getElementById('topbar'));
+buildTopbar(document.getElementById('topbar'), { onViewerMode: enterViewerMode });
 
 const panelContent = document.getElementById('panel-content');
 
@@ -407,6 +407,7 @@ async function runProcess() {
       colors: s.procColors,
       custom: s.procCustom,
       dither: s.procDither,
+      ditherPattern: s.procDitherPattern,
       ditherStrength: s.procDitherStrength,
     });
     pipeline.rebuildWireframeOverlay();

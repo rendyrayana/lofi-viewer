@@ -155,7 +155,9 @@ export class ModelProcessor {
         flipY = c.sampler.flipY;
       }
 
-      if (img && texOn && (opts.saturation !== 1 || opts.contrast !== 1)) {
+      // Colour adjustment prepares the texture for palette reduction, so it
+      // runs only when that step is on (and is baked into texture and print).
+      if (img && opts.palette !== 'off' && (opts.saturation !== 1 || opts.contrast !== 1)) {
         img = await time('adjust', () => adjustColor(img, opts.saturation, opts.contrast));
       }
 
@@ -171,8 +173,8 @@ export class ModelProcessor {
     for (const e of this.entries) {
       if (e.image && opts.palette !== 'off') {
         const q = await time('quantize', () => (opts.palette === '15bit'
-          ? quantize15(e.image, opts.dither)
-          : quantizeToPalette(e.image, this.palette, opts.dither, opts.ditherStrength)));
+          ? quantize15(e.image, opts.ditherPattern, opts.ditherStrength, opts.dither)
+          : quantizeToPalette(e.image, this.palette, opts.ditherPattern, opts.ditherStrength, opts.dither)));
         e.image = { ...q, flipY: e.image.flipY };
       }
       await time('upload', () => this._apply(e, opts));

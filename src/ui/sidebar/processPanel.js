@@ -18,6 +18,11 @@ const PALETTE_MODES = [
   { id: 'extract', label: 'From texture', sub: 'pick N' },
   { id: 'custom', label: 'Custom', sub: 'your colors' },
 ];
+const DITHER_PATTERNS = [
+  { id: 'psx4', label: 'PS1 4×4', hint: 'PlayStation GPU ordered matrix' },
+  { id: 'bayer8', label: 'Bayer 8×8', hint: 'Finer ordered pattern' },
+  { id: 'fs', label: 'Diffusion', hint: 'Floyd–Steinberg error diffusion' },
+];
 const SAMPLING = [
   { id: 'nearest', label: 'Nearest' },
   { id: 'box', label: 'Average' },
@@ -149,20 +154,6 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
             <div class="seg-control seg-full" id="seg-texfilter-proc">
               ${SAMPLING.map(m => `<button data-val="${m.id}" class="${s.procTexFilter === m.id ? 'active' : ''}">${m.label}</button>`).join('')}
             </div>
-            <div class="panel-row">
-              <label for="sl-sat">Saturation</label>
-              <div class="row-right">
-                <input type="range" id="sl-sat" min="0" max="2" step="0.05" value="${s.procSaturation}" />
-                <span class="row-value" id="lbl-sat">${s.procSaturation.toFixed(2)}</span>
-              </div>
-            </div>
-            <div class="panel-row">
-              <label for="sl-con">Contrast</label>
-              <div class="row-right">
-                <input type="range" id="sl-con" min="0.5" max="2" step="0.05" value="${s.procContrast}" />
-                <span class="row-value" id="lbl-con">${s.procContrast.toFixed(2)}</span>
-              </div>
-            </div>
             ${s.procDecimate ? '<p class="step-note">Rebaked from the original scan, then sampled down to this size.</p>' : ''}
           </div>
         </section>
@@ -203,13 +194,32 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
             <div class="swatches" id="swatches" aria-label="Palette colors"></div>
             ${['preset', 'extract', 'clut4'].includes(s.procPalette) ? `
             <button class="btn btn-ghost btn-small" id="btn-tocustom">Edit these colors</button>` : ''}
+            <span class="field-label">Before reducing <span class="field-label-note">baked into the texture and the print</span></span>
             <div class="panel-row">
-              <label for="sw-procdither">Dither<small class="proc-hint">PS1 4×4 ordered matrix</small></label>
+              <label for="sl-sat">Saturation</label>
+              <div class="row-right">
+                <input type="range" id="sl-sat" min="0" max="2" step="0.05" value="${s.procSaturation}" />
+                <span class="row-value" id="lbl-sat">${s.procSaturation.toFixed(2)}</span>
+              </div>
+            </div>
+            <div class="panel-row">
+              <label for="sl-con">Contrast</label>
+              <div class="row-right">
+                <input type="range" id="sl-con" min="0.5" max="2" step="0.05" value="${s.procContrast}" />
+                <span class="row-value" id="lbl-con">${s.procContrast.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div class="panel-row">
+              <label for="sw-procdither">Dither</label>
               <div class="row-right">${mkSwitch('sw-procdither', s.procDither, 'Dither')}</div>
             </div>
-            ${s.procDither && s.procPalette !== '15bit' ? `
+            ${s.procDither ? `
+            <div class="seg-control seg-full" id="seg-ditherpattern" role="group" aria-label="Dither pattern">
+              ${DITHER_PATTERNS.map(d => `<button data-val="${d.id}" class="${s.procDitherPattern === d.id ? 'active' : ''}" title="${d.hint}">${d.label}</button>`).join('')}
+            </div>
             <div class="panel-row">
-              <label for="sl-ditherstr">Dither strength</label>
+              <label for="sl-ditherstr">Strength${s.procPalette === '15bit' ? '<small class="proc-hint">1.00 = PS1 hardware amount</small>' : ''}</label>
               <div class="row-right">
                 <input type="range" id="sl-ditherstr" min="0" max="2" step="0.05" value="${s.procDitherStrength}" />
                 <span class="row-value" id="lbl-ditherstr">${s.procDitherStrength.toFixed(2)}</span>
@@ -322,6 +332,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
       if (pal?.length) store.setMany({ procCustom: pal.slice(0, MAX_CUSTOM), procPaletteLast: 'custom', procPalette: 'custom' });
     });
     $('#sw-procdither').addEventListener('change', e => store.set('procDither', e.target.checked));
+    $('#seg-ditherpattern')?.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => store.set('procDitherPattern', btn.dataset.val)));
     const slStr = $('#sl-ditherstr');
     if (slStr) {
       slStr.addEventListener('input', () => { $('#lbl-ditherstr').textContent = parseFloat(slStr.value).toFixed(2); });

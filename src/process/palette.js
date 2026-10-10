@@ -165,36 +165,76 @@ export function extractPalette(img, count) {
 
 function luminance([r, g, b]) { return 0.299 * r + 0.587 * g + 0.114 * b; }
 
-// PS1 15-bit colour: C5 = clamp(floor((C·255 + D) / 8), 0, 31), expanded back to 8 bits.
-export function quantize15(img, dither) {
-  const { data, width: W } = img;
+const BAYER8 = (() => {
+  const m = [[0, 2], [3, 1]];
+  let cur = m;
+  for (let n = 2; n < 8; n *= 2) {
+    const next = Array.from({ length: n * 2 }, () => new Array(n * 2));
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const v = cur[y][x] * 4;
+      next[y][x] = v; next[y][x + n] = v + 2; next[y + n][x] = v + 3; next[y + n][x + n] = v + 1;
+    }
+    cur = next;
+  }
+  return cur;
+})();
+
+// Ordered-dither offset in units of one quantisation step, roughly −0.5…+0.5.
+// 'psx4' uses the PlayStation GPU matrix (−4…+3 in 8-bit units, step 8).
+function orderedOffset(pattern, x, y) {
+  if (pattern === 'bayer8') return (BAYER8[y & 7][x & 7] + 0.5) / 64 - 0.5;
+  return PSX_DITHER[y & 3][x & 3] / 8;
+}
+
+// PS1 15-bit colour: C5 = clamp(floor((C·255 + D) / 8), 0, 31), expanded back
+// to 8 bits. With pattern 'psx4' and strength 1, D is exactly the hardware
+// dither offset. 'fs' diffuses the rounding error (Floyd–Steinberg) instead.
+export function quantize15(img, pattern = 'psx4', strength = 1, dither = true) {
+  const { data, width: W, height: H } = img;
   const out = new Uint8ClampedArray(data.length);
+  const q = v => Math.min(31, Math.max(0, Math.floor(v / 8)));
+  if (dither && pattern === 'fs') {
+    const buf = Float32Array.from(data);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const old = buf[i + c];
+        const nv = Math.round(Math.min(31, Math.max(0, Math.round(old * 31 / 255))) * 255 / 31);
+        out[i + c] = nv;
+        diffuse(buf, W, H, x, y, c, (old - nv) * strength);
+      }
+      out[i + 3] = data[i + 3];
+    }
+    return { ...img, data: out };
+  }
   for (let i = 0; i < data.length; i += 4) {
     const p = i / 4, x = p % W, y = (p / W) | 0;
-    const d = dither ? PSX_DITHER[y & 3][x & 3] : 0;
-    for (let c = 0; c < 3; c++) {
-      const c5 = Math.min(31, Math.max(0, Math.floor((data[i + c] + d) / 8)));
-      out[i + c] = Math.round(c5 * 255 / 31);
-    }
+    const d = dither ? orderedOffset(pattern, x, y) * 8 * strength : 0;
+    for (let c = 0; c < 3; c++) out[i + c] = Math.round(q(data[i + c] + d) * 255 / 31);
     out[i + 3] = data[i + 3];
   }
   return { ...img, data: out };
 }
 
-// Maps every pixel to its nearest palette colour (redmean distance). With
-// dither on, the PSX matrix offsets each pixel by a fraction of the palette's
-// typical colour spacing before matching.
-export function quantizeToPalette(img, hexColors, dither, strength = 1) {
-  const pal = hexColors.map(hexToRgb);
-  const { data, width: W } = img;
-  const out = new Uint8ClampedArray(data.length);
-  const spread = strength * 255 / Math.max(2, Math.cbrt(pal.length) * 2);
-  const cache = new Map();
+function diffuse(buf, W, H, x, y, c, err) {
+  const add = (dx, dy, f) => {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || nx >= W || ny >= H) return;
+    buf[(ny * W + nx) * 4 + c] += err * f;
+  };
+  add(1, 0, 7 / 16); add(-1, 1, 3 / 16); add(0, 1, 5 / 16); add(1, 1, 1 / 16);
+}
 
-  for (let i = 0; i < data.length; i += 4) {
-    const p = i / 4, x = p % W, y = (p / W) | 0;
-    const d = dither ? (PSX_DITHER[y & 3][x & 3] + 0.5) / 8 * spread : 0;
-    const r = clamp(data[i] + d), g = clamp(data[i + 1] + d), b = clamp(data[i + 2] + d);
+// Maps every pixel to its nearest palette colour (redmean distance), with
+// optional ordered dither (offset scaled to the palette's typical colour
+// spacing) or Floyd–Steinberg error diffusion.
+export function quantizeToPalette(img, hexColors, pattern = 'psx4', strength = 1, dither = true) {
+  const pal = hexColors.map(hexToRgb);
+  const { data, width: W, height: H } = img;
+  const out = new Uint8ClampedArray(data.length);
+  const spread = 255 / Math.max(2, Math.cbrt(pal.length) * 2);
+  const cache = new Map();
+  const nearest = (r, g, b) => {
     const key = (r << 16) | (g << 8) | b;
     let best = cache.get(key);
     if (best === undefined) {
@@ -206,7 +246,28 @@ export function quantizeToPalette(img, hexColors, dither, strength = 1) {
       }
       cache.set(key, best);
     }
-    out[i] = pal[best][0]; out[i + 1] = pal[best][1]; out[i + 2] = pal[best][2]; out[i + 3] = data[i + 3];
+    return best;
+  };
+
+  if (dither && pattern === 'fs') {
+    const buf = Float32Array.from(data);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const k = nearest(clamp(buf[i]), clamp(buf[i + 1]), clamp(buf[i + 2]));
+      for (let c = 0; c < 3; c++) {
+        out[i + c] = pal[k][c];
+        diffuse(buf, W, H, x, y, c, (buf[i + c] - pal[k][c]) * strength);
+      }
+      out[i + 3] = data[i + 3];
+    }
+    return { ...img, data: out };
+  }
+
+  for (let i = 0; i < data.length; i += 4) {
+    const p = i / 4, x = p % W, y = (p / W) | 0;
+    const d = dither ? orderedOffset(pattern, x, y) * spread * strength : 0;
+    const k = nearest(clamp(data[i] + d), clamp(data[i + 1] + d), clamp(data[i + 2] + d));
+    out[i] = pal[k][0]; out[i + 1] = pal[k][1]; out[i + 2] = pal[k][2]; out[i + 3] = data[i + 3];
   }
   return { ...img, data: out };
 }
