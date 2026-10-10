@@ -1,4 +1,5 @@
 import { store } from '../../store.js';
+import { PRESETS } from '../../export/preset.js';
 
 export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, onClearScene }) {
   el.innerHTML = `
@@ -24,12 +25,15 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
 
       <span class="panel-section-label">Scene</span>
       <div class="panel-row">
-        <label for="inp-preset">Preset</label>
+        <label for="inp-preset">Look Preset</label>
         <div class="row-right">
           <select id="inp-preset">
-            <option value="default">Default PSX</option>
-            <option value="horror">Horror Night</option>
-            <option value="retro">Retro Arcade</option>
+            <option value="custom" ${store.get('lookPreset') === 'custom' ? 'selected' : ''}>Custom</option>
+            ${[...new Set(Object.values(PRESETS).map(p => p.group))].map(g => `
+              <optgroup label="${g}">
+                ${Object.entries(PRESETS).filter(([, p]) => p.group === g).map(([k, p]) =>
+                  `<option value="${k}" ${store.get('lookPreset') === k ? 'selected' : ''}>${p.label}</option>`).join('')}
+              </optgroup>`).join('')}
           </select>
         </div>
       </div>
@@ -54,11 +58,12 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
     e.target.value = '';
   });
 
+  const unsubPreset = store.subscribe('lookPreset', v => { el.querySelector('#inp-preset').value = v; });
   el.querySelector('#btn-clear').addEventListener('click', () => {
     if (confirm('Clear scene? This will remove all loaded models.')) onClearScene();
   });
 
-  store.subscribe('filename', name => {
+  const unsubFile = store.subscribe('filename', name => {
     const fi = el.querySelector('#file-info');
     fi.style.display = name ? 'flex' : 'none';
     if (name) {
@@ -66,4 +71,6 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
       el.querySelector('#fi-size').textContent = store.get('filesize') || '';
     }
   });
+
+  return () => { unsubPreset(); unsubFile(); };
 }

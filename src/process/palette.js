@@ -19,6 +19,18 @@ export const PALETTE_PRESETS = {
     label: 'Game Boy',
     colors: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'],
   },
+  virtualBoy: {
+    label: 'Virtual Boy',
+    colors: ['#000000', '#550000', '#aa0000', '#ff0000'],
+  },
+  gbPocket: {
+    label: 'Game Boy Pocket',
+    colors: ['#000000', '#555555', '#aaaaaa', '#ffffff'],
+  },
+  ega: {
+    label: 'EGA (16)',
+    colors: ['#000000', '#0000aa', '#00aa00', '#00aaaa', '#aa0000', '#aa00aa', '#aa5500', '#aaaaaa', '#555555', '#5555ff', '#55ff55', '#55ffff', '#ff5555', '#ff55ff', '#ffff55', '#ffffff'],
+  },
   cga: {
     label: 'CGA (mode 4)',
     colors: ['#000000', '#55ffff', '#ff55ff', '#ffffff'],

@@ -1,5 +1,6 @@
 const defaults = {
   activeTab: 'import',
+  lookPreset: 'custom',
   inverted: false,
   filename: null,
   filesize: null,

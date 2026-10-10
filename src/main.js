@@ -14,7 +14,7 @@ import { buildEnvironmentPanel } from './ui/sidebar/environmentPanel.js';
 import { buildCameraPanel } from './ui/sidebar/cameraPanel.js';
 import { buildEffectsPanel } from './ui/sidebar/effectsPanel.js';
 import { buildExportPanel } from './ui/sidebar/exportPanel.js';
-import { loadPresetFromURL, PRESETS, getPresetData } from './export/preset.js';
+import { loadPresetFromURL, applyPreset, getPresetData } from './export/preset.js';
 import { saveViewerHtml } from './export/saveHtml.js';
 import { collectFaces, assignFilaments, build3mf, download3mf } from './export/print3mf.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -79,7 +79,7 @@ function showPanel(tab) {
   panelContent.appendChild(div);
 
   if (tab === 'import') {
-    buildImportPanel(div, {
+    panelCleanup = buildImportPanel(div, {
       onLoadModel: handleLoadModel,
       onLoadTexture: handleLoadTexture,
       onLoadHDRI: handleLoadHDRI,
@@ -247,20 +247,23 @@ store.subscribe('compare', on => {
 store.subscribe('compareSplit', layoutCompare);
 window.addEventListener('resize', () => { if (store.get('compare')) layoutCompare(); });
 
+const cleanBg = new THREE.Color();
 function renderCompareOriginal() {
   const r = sc.renderer;
   const w = canvas.clientWidth, h = canvas.clientHeight;
   const split = Math.round(w * store.get('compareSplit'));
   if (split <= 0) return;
   processor.withOriginal(() => {
-    const prevCS = r.outputColorSpace;
+    const prevCS = r.outputColorSpace, prevBg = sc.scene.background;
     r.outputColorSpace = THREE.SRGBColorSpace;
+    if (prevBg?.isColor) sc.scene.background = cleanBg.set(store.get('bgColor'));
     r.setRenderTarget(null);
     r.setScissorTest(true);
     r.setScissor(0, 0, split, h);
     r.render(sc.scene, sc.camera);
     r.setScissorTest(false);
     r.outputColorSpace = prevCS;
+    sc.scene.background = prevBg;
   });
 }
 
@@ -518,8 +521,13 @@ function handleBgImageLoad(file) {
   });
 }
 
+// The renderer outputs linear values unencoded (the PSX shader writes sRGB
+// itself), so background colours must keep their raw sRGB values.
+const bgColorObj = new THREE.Color();
+function rawColor(hex) { return bgColorObj.setStyle(hex, THREE.LinearSRGBColorSpace); }
+
 function applyBackground(type) {
-  if (type === 'color') sc.scene.background = new THREE.Color(store.get('bgColor'));
+  if (type === 'color') sc.scene.background = rawColor(store.get('bgColor'));
   else if (type === 'none') sc.scene.background = null;
   else if (type === 'image') sc.scene.background = bgImageTex || null;
   // gradient is applied each frame in syncEnv
@@ -536,7 +544,7 @@ function syncEnv() {
   sc.scene.fog = null;
 
   if (s.bgType === 'color') {
-    sc.scene.background = new THREE.Color(s.bgColor);
+    sc.scene.background = rawColor(s.bgColor);
   } else if (s.bgType === 'none') {
     sc.scene.background = null;
   } else if (s.bgType === 'image') {
@@ -565,10 +573,7 @@ function syncEnv() {
 
 // ── Import preset select ──────────────────────────────────────────────────────
 document.addEventListener('change', e => {
-  if (e.target.id === 'inp-preset') {
-    const p = PRESETS[e.target.value];
-    if (p) store.setMany(p);
-  }
+  if (e.target.id === 'inp-preset' && e.target.value !== 'custom') applyPreset(e.target.value);
 });
 
 // ── HUD update ────────────────────────────────────────────────────────────────
