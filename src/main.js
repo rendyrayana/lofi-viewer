@@ -14,7 +14,7 @@ import { buildExportPanel } from './ui/sidebar/exportPanel.js';
 import { buildStatusIndicator } from './ui/statusIndicator.js';
 import { loadPresetFromURL, getPresetData } from './export/preset.js';
 import { saveViewerHtml } from './export/saveHtml.js';
-import { collectFaces, assignFilaments, prepareMesh, build3mf, buildObjMtl, downloadFile } from './export/print3mf.js';
+import { collectFaces, prepareMesh, build3mf, buildObjMtl, downloadFile } from './export/print3mf.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { defaults, PANEL_KEYS } from './store.js';
 
@@ -101,7 +101,7 @@ function showPanel(tab) {
     });
     panelContent.scrollTop = scroll;
   } else if (tab === 'export') {
-    buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExportPrint: handleExportPrint, onExportGlb: handleExportGlb });
+    panelCleanup = buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExportPrint: handleExportPrint, onExportGlb: handleExportGlb });
   }
 }
 
@@ -265,6 +265,22 @@ function renderClean() {
   });
 }
 
+// Plain-shaded print preview in place of the processed meshes.
+function renderPrintPreview() {
+  const r = sc.renderer;
+  const prevCS = r.outputColorSpace, prevBg = sc.scene.background;
+  processor.entries.forEach(e => { e.mesh.visible = false; });
+  previewGroup.visible = true;
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  if (prevBg?.isColor) sc.scene.background = cleanBg.set(store.get('bgColor'));
+  r.setRenderTarget(null);
+  r.render(sc.scene, sc.camera);
+  r.outputColorSpace = prevCS;
+  sc.scene.background = prevBg;
+  previewGroup.visible = false;
+  processor.entries.forEach(e => { e.mesh.visible = true; });
+}
+
 function renderCompareOriginal() {
   const r = sc.renderer;
   const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -381,6 +397,7 @@ function handleClearScene(resetStore = true) {
     loadedModel = null;
   }
   processor.detach();
+  disposePreview();
   pipeline.psxMaterials.forEach(m => m.dispose());
   pipeline.psxMaterials = [];
   pipeline.psxMeshes = [];
@@ -497,9 +514,8 @@ function exportBaseName() {
   return (store.get('filename') || 'model').replace(/\.[^.]+$/, '');
 }
 
-// format: '3mf' (Prusa/Orca/Bambu paint) or 'obj' (OBJ + MTL, Bambu colour matching)
-async function handleExportPrint(format = '3mf') {
-  if (!processor.hasModel) return 'Load a model first.';
+// Builds the coloured, cleaned print mesh from the current processed model.
+async function buildPrintModel() {
   clearTimeout(procTimer);
   if (procTimer || procRunning || procQueued) {
     procTimer = null;
@@ -507,12 +523,27 @@ async function handleExportPrint(format = '3mf') {
     await processingIdle();
   }
   const s = store.state;
-  const faces = s.tris * 4 ** s.printColorDetail;
-  if (faces > 600000 && !confirm(`The print file will have ${faces.toLocaleString()} triangles. Decimate first or lower Color detail? Export anyway?`)) return '';
-  const parts = collectFaces(processor, { subdiv: s.printColorDetail });
+  const palOn = s.procPalette !== 'off';
   const fixed = ['preset', 'extract', 'custom', 'clut4', 'clut8'].includes(s.procPalette) ? processor.palette : null;
-  const slots = assignFilaments(parts, fixed, s.printFilaments);
-  const prepared = prepareMesh(parts, { heightMm: s.printHeight, minIsland: s.printMinIsland, closeHoles: s.printCloseHoles });
+  const { parts, slots } = collectFaces(processor, {
+    maxLevel: s.printColorDetail,
+    adaptive: true,
+    palette: fixed,
+    maxFilaments: s.printFilaments,
+    saturation: palOn ? s.procSaturation : 1,
+    contrast: palOn ? s.procContrast : 1,
+  });
+  const prepared = prepareMesh(parts, {
+    heightMm: s.printHeight, minAreaMm2: s.printMinArea, smooth: s.printSmooth, closeHoles: s.printCloseHoles,
+  });
+  return { prepared, slots };
+}
+
+// format: 'obj' (OBJ + MTL, Bambu colour matching) or '3mf' (Orca / PrusaSlicer paint)
+async function handleExportPrint(format = '3mf') {
+  if (!processor.hasModel) return 'Load a model first.';
+  if (store.get('tris') > 200000 && !confirm(`The model has ${store.get('tris').toLocaleString()} triangles. Decimating first is recommended for printing. Export anyway?`)) return '';
+  const { prepared, slots } = await buildPrintModel();
   const name = exportBaseName();
   if (format === 'obj') {
     const { obj, mtl, base } = buildObjMtl(prepared, slots, { name });
@@ -527,7 +558,8 @@ async function handleExportPrint(format = '3mf') {
   const lines = [`${st.triangles.toLocaleString()} tris · ${slots.length} filaments · ${st.sizeMm.map(v => v.toFixed(0)).join('×')} mm`];
   if (format === 'obj') lines.push('Keep the .obj and .mtl together, then open the .obj in Bambu Studio.');
   if (st.holesClosed) lines.push(`Closed ${st.holesClosed} hole${st.holesClosed > 1 ? 's' : ''}`);
-  if (st.islandsMerged) lines.push(`Merged ${st.islandsMerged} color specks (${st.facesRecolored} faces)`);
+  if (st.facesSmoothed) lines.push(`Smoothed ${st.facesSmoothed.toLocaleString()} edge faces`);
+  if (st.islandsMerged) lines.push(`Merged ${st.islandsMerged} color specks (${st.facesRecolored.toLocaleString()} faces)`);
   if (st.openEdges || st.nonManifoldEdges) {
     lines.push(`Warning: not watertight — ${st.openEdges} open, ${st.nonManifoldEdges} non-manifold edges. The slicer may need to repair it.`);
   } else {
@@ -535,6 +567,61 @@ async function handleExportPrint(format = '3mf') {
   }
   return lines.join('\n');
 }
+
+// ── Print preview: the exact per-face filament colours in the viewport ───────
+let previewGroup = null, previewTimer = null, previewToken = 0;
+
+function disposePreview() {
+  if (!previewGroup) return;
+  sc.scene.remove(previewGroup);
+  previewGroup.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
+  previewGroup = null;
+}
+
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  if (!store.get('printPreview')) { disposePreview(); store.set('printPreviewInfo', ''); return; }
+  previewTimer = setTimeout(refreshPreview, 250);
+}
+
+async function refreshPreview() {
+  if (!store.get('printPreview') || !processor.hasModel) return;
+  const token = ++previewToken;
+  store.set('printPreviewInfo', 'Building preview…');
+  try {
+    const { prepared, slots } = await buildPrintModel();
+    if (token !== previewToken || !store.get('printPreview')) return;
+    disposePreview();
+    const colors = slots.map(h => new THREE.Color(h));
+    previewGroup = new THREE.Group();
+    previewGroup.visible = false;
+    for (const m of prepared.meshes) {
+      const nF = m.tris.length / 4;
+      const pos = new Float32Array(nF * 9), col = new Float32Array(nF * 9);
+      for (let f = 0; f < nF; f++) {
+        const c = colors[m.tris[f * 4 + 3]];
+        for (let k = 0; k < 3; k++) {
+          const v = m.tris[f * 4 + k] * 3, o = (f * 3 + k) * 3;
+          pos[o] = m.world[v]; pos[o + 1] = m.world[v + 1]; pos[o + 2] = m.world[v + 2];
+          col[o] = c.r; col[o + 1] = c.g; col[o + 2] = c.b;
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      g.computeVertexNormals();
+      previewGroup.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, toneMapped: false })));
+    }
+    sc.scene.add(previewGroup);
+    store.set('printPreviewInfo', `Preview: ${prepared.stats.triangles.toLocaleString()} faces · ${slots.length} filaments`);
+  } catch (e) {
+    console.error('Print preview failed:', e);
+    store.set('printPreviewInfo', `Preview failed: ${e.message}`);
+  }
+}
+
+['printPreview', 'printColorDetail', 'printSmooth', 'printMinArea', 'printCloseHoles', 'printFilaments', 'procStats']
+  .forEach(k => store.subscribe(k, schedulePreview));
 
 function buildProcessedGlb() {
   const root = new THREE.Group();
@@ -720,7 +807,8 @@ function animate(time) {
     sc.scene.overrideMaterial = null;
   }
 
-  if (s.lookEnabled) pipeline.render(time * 0.001);
+  if (s.printPreview && previewGroup) renderPrintPreview();
+  else if (s.lookEnabled) pipeline.render(time * 0.001);
   else renderClean();
   if (s.compare && processor.hasModel) renderCompareOriginal();
 

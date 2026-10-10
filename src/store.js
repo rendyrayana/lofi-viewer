@@ -77,9 +77,12 @@ const defaults = {
   exportDuration: 4,
   printHeight: 60,
   printFilaments: 4,
-  printMinIsland: 4,
+  printMinArea: 2,
+  printSmooth: 1,
+  printPreview: false,
+  printPreviewInfo: '',
   printCloseHoles: true,
-  printColorDetail: 2,
+  printColorDetail: 3,
 };
 
 export { defaults };

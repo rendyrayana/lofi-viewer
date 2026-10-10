@@ -75,18 +75,36 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
             </div>
           </div>
           <div class="panel-row">
-            <label for="sel-colordetail">Color detail<small class="proc-hint">Splits faces for coloring only — shape stays low-poly</small></label>
+            <label for="sw-printpreview">Preview print colors<small class="proc-hint">Show exactly what goes to the slicer</small></label>
+            <div class="row-right">
+              <label class="switch-wrap" for="sw-printpreview" aria-label="Preview print colors">
+                <input type="checkbox" id="sw-printpreview" role="switch" ${s.printPreview ? 'checked' : ''} />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+          </div>
+          <div class="proc-status" id="preview-info" aria-live="polite">${s.printPreviewInfo || ''}</div>
+          <div class="panel-row">
+            <label for="sel-colordetail">Color detail<small class="proc-hint">Faces split only along color edges, read from the original scan</small></label>
             <div class="row-right">
               <select id="sel-colordetail">
-                ${[[0, '1 color per face'], [1, '4× finer'], [2, '16× finer'], [3, '64× finer']].map(([n, l]) => `<option value="${n}" ${s.printColorDetail === n ? 'selected' : ''}>${l}</option>`).join('')}
+                ${[[0, '1 color per face'], [2, 'Adaptive · up to 16×'], [3, 'Adaptive · up to 64×'], [4, 'Adaptive · up to 256×']].map(([n, l]) => `<option value="${n}" ${s.printColorDetail === n ? 'selected' : ''}>${l}</option>`).join('')}
               </select>
             </div>
           </div>
           <div class="panel-row">
-            <label for="sel-minisland">Merge color specks<small class="proc-hint">Recolor patches smaller than N faces</small></label>
+            <label for="sel-smooth">Smooth edges<small class="proc-hint">Straightens ragged color boundaries</small></label>
             <div class="row-right">
-              <select id="sel-minisland">
-                ${[[0, 'Off'], [2, '2 faces'], [4, '4 faces'], [8, '8 faces'], [16, '16 faces'], [32, '32 faces']].map(([n, l]) => `<option value="${n}" ${s.printMinIsland === n ? 'selected' : ''}>${l}</option>`).join('')}
+              <select id="sel-smooth">
+                ${[[0, 'Off'], [1, 'Light'], [2, 'Medium'], [4, 'Strong']].map(([n, l]) => `<option value="${n}" ${s.printSmooth === n ? 'selected' : ''}>${l}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="panel-row">
+            <label for="sel-minarea">Merge color specks<small class="proc-hint">Patches smaller than this printed area</small></label>
+            <div class="row-right">
+              <select id="sel-minarea">
+                ${[[0, 'Off'], [0.5, '0.5 mm²'], [1, '1 mm²'], [2, '2 mm²'], [4, '4 mm²'], [8, '8 mm²']].map(([n, l]) => `<option value="${n}" ${s.printMinArea === n ? 'selected' : ''}>${l}</option>`).join('')}
               </select>
             </div>
           </div>
@@ -159,7 +177,10 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
   });
   el.querySelector('#sel-filaments').addEventListener('change', e => store.set('printFilaments', parseInt(e.target.value, 10)));
   el.querySelector('#sel-colordetail').addEventListener('change', e => store.set('printColorDetail', parseInt(e.target.value, 10)));
-  el.querySelector('#sel-minisland').addEventListener('change', e => store.set('printMinIsland', parseInt(e.target.value, 10)));
+  el.querySelector('#sel-minarea').addEventListener('change', e => store.set('printMinArea', parseFloat(e.target.value)));
+  el.querySelector('#sel-smooth').addEventListener('change', e => store.set('printSmooth', parseInt(e.target.value, 10)));
+  el.querySelector('#sw-printpreview').addEventListener('change', e => store.set('printPreview', e.target.checked));
+  const unsubPreview = store.subscribe('printPreviewInfo', v => { el.querySelector('#preview-info').textContent = v || ''; });
   el.querySelector('#sw-closeholes').addEventListener('change', e => store.set('printCloseHoles', e.target.checked));
   const runPrintExport = async (format, btn) => {
     const status = el.querySelector('#print-status');
@@ -181,4 +202,6 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
   el.querySelector('#btn-save-html').addEventListener('click', () => onSaveHtml?.());
   el.querySelector('#btn-viewer').addEventListener('click', () => onEnterViewer?.());
   el.querySelector('#btn-share').addEventListener('click', () => shareLink());
+
+  return () => unsubPreview();
 }

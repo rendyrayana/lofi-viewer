@@ -38,23 +38,58 @@ export function prepareSource(geometry) {
   return { geo, bvh, diag };
 }
 
-// For every texel covered by the low-poly atlas, project onto the original scan
-// along the low-poly face normal (both directions, within a cage of `cage` ×
-// model size) and copy the texture colour found there. Rays that miss — e.g.
-// over holes in the scan — fall back to the closest surface point.
-export function bake(low, source, sampler, width, height = width, { cage = 0.03 } = {}) {
+// Returns project(P, N, out): the original scan's texture colour at the point
+// where a ray from P along ±N (within a cage of `cage` × model size) meets the
+// scan, falling back to the closest surface point when the ray misses (e.g.
+// over holes). P and N are in the scan's local space.
+export function makeProjector(source, sampler, { cage = 0.03 } = {}) {
   const { geo, bvh, diag } = source;
   const maxDist = diag * cage;
-  const ray = new THREE.Ray();
-  const faceN = new THREE.Vector3();
-  let rayHits = 0, samples = 0;
   const idx = geo.index.array, pos = geo.attributes.position, uvA = geo.attributes.uv;
-  const px = new Uint8ClampedArray(width * height * 4);
-  const filled = new Uint8Array(width * height);
+  const ray = new THREE.Ray();
   const hit = { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
-  const P = new THREE.Vector3(), A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
   const bary = new THREE.Vector3();
   const tri = new THREE.Triangle();
+  const stats = { samples: 0, rayHits: 0 };
+
+  const project = (P, N, out) => {
+    ray.origin.copy(P); ray.direction.copy(N);
+    const fwd = bvh.raycastFirst(ray, THREE.DoubleSide, 0, maxDist);
+    ray.direction.negate();
+    const back = bvh.raycastFirst(ray, THREE.DoubleSide, 0, maxDist);
+    const best = fwd && back ? (fwd.distance <= back.distance ? fwd : back) : (fwd || back);
+    stats.samples++;
+    let face;
+    if (best) {
+      stats.rayHits++;
+      face = best.faceIndex;
+      hit.point.copy(best.point);
+    } else {
+      bvh.closestPointToPoint(P, hit);
+      face = hit.faceIndex;
+    }
+    const f = face * 3;
+    const i0 = idx[f], i1 = idx[f + 1], i2 = idx[f + 2];
+    A.fromBufferAttribute(pos, i0); B.fromBufferAttribute(pos, i1); C.fromBufferAttribute(pos, i2);
+    tri.set(A, B, C).getBarycoord(hit.point, bary);
+    const u = bary.x * uvA.getX(i0) + bary.y * uvA.getX(i1) + bary.z * uvA.getX(i2);
+    const v = bary.x * uvA.getY(i0) + bary.y * uvA.getY(i1) + bary.z * uvA.getY(i2);
+    sampler.sample(u, v, out);
+    return out;
+  };
+  project.stats = stats;
+  return project;
+}
+
+// For every texel covered by the low-poly atlas, project onto the original
+// scan along the low-poly face normal and copy the texture colour found there.
+export function bake(low, source, sampler, width, height = width, { cage = 0.03 } = {}) {
+  const project = makeProjector(source, sampler, { cage });
+  const faceN = new THREE.Vector3();
+  const px = new Uint8ClampedArray(width * height * 4);
+  const filled = new Uint8Array(width * height);
+  const P = new THREE.Vector3();
   const rgba = [0, 0, 0, 0];
 
   const sampleAt = (lam0, lam1, lam2, t, texel) => {
@@ -64,28 +99,7 @@ export function bake(low, source, sampler, width, height = width, { cage = 0.03 
       lam0 * p[o + 1] + lam1 * p[o + 4] + lam2 * p[o + 7],
       lam0 * p[o + 2] + lam1 * p[o + 5] + lam2 * p[o + 8],
     );
-    let face = -1;
-    ray.origin.copy(P); ray.direction.copy(faceN);
-    const fwd = bvh.raycastFirst(ray, THREE.DoubleSide, 0, maxDist);
-    ray.direction.negate();
-    const back = bvh.raycastFirst(ray, THREE.DoubleSide, 0, maxDist);
-    const best = fwd && back ? (fwd.distance <= back.distance ? fwd : back) : (fwd || back);
-    samples++;
-    if (best) {
-      rayHits++;
-      face = best.faceIndex;
-      hit.point.copy(best.point);
-    } else {
-      bvh.closestPointToPoint(P, hit);
-      face = hit.faceIndex;
-    }
-    const f = face * 3;
-    A.fromBufferAttribute(pos, idx[f]); B.fromBufferAttribute(pos, idx[f + 1]); C.fromBufferAttribute(pos, idx[f + 2]);
-    tri.set(A, B, C).getBarycoord(hit.point, bary);
-    const i0 = idx[f], i1 = idx[f + 1], i2 = idx[f + 2];
-    const u = bary.x * uvA.getX(i0) + bary.y * uvA.getX(i1) + bary.z * uvA.getX(i2);
-    const v = bary.x * uvA.getY(i0) + bary.y * uvA.getY(i1) + bary.z * uvA.getY(i2);
-    sampler.sample(u, v, rgba);
+    project(P, faceN, rgba);
     const q = texel * 4;
     px[q] = rgba[0]; px[q + 1] = rgba[1]; px[q + 2] = rgba[2]; px[q + 3] = 255;
     filled[texel] = 1;
@@ -132,6 +146,7 @@ export function bake(low, source, sampler, width, height = width, { cage = 0.03 
   let covered = 0;
   for (let i = 0; i < filled.length; i++) covered += filled[i];
   dilate(px, filled, width, height, Math.max(2, Math.ceil(Math.max(width, height) / 32)));
+  const { samples, rayHits } = project.stats;
   return { data: px, width, height, coverage: covered / (width * height), rayHitRate: samples ? rayHits / samples : 1 };
 }
 
