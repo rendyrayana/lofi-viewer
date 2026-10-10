@@ -160,12 +160,16 @@ const LOOK_KEYS = [
 
 let applying = false;
 
-export function applyPreset(name) {
+// With includeProcess off, only the rendering look changes; the mesh,
+// texture and palette processing stay as the user set them.
+export function applyPreset(name, { includeProcess = true } = {}) {
   const p = PRESETS[name];
   if (!p) return;
-  const base = Object.fromEntries(LOOK_KEYS.map(k => [k, defaults[k]]));
+  const keep = k => includeProcess || !k.startsWith('proc');
+  const base = Object.fromEntries(LOOK_KEYS.filter(keep).map(k => [k, defaults[k]]));
+  const settings = Object.fromEntries(Object.entries(p.settings).filter(([k]) => keep(k)));
   applying = true;
-  try { store.setMany({ ...base, ...p.settings, lookPreset: name }); } finally { applying = false; }
+  try { store.setMany({ ...base, ...settings, lookPreset: name, lookEnabled: true }); } finally { applying = false; }
 }
 
 // Any manual change to a look setting turns the preset selector to "Custom".

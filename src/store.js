@@ -1,6 +1,10 @@
 const defaults = {
   activeTab: 'import',
   lookPreset: 'custom',
+  lookEnabled: true,
+  presetSetsProcess: true,
+  loadBusy: false,
+  loadMs: null,
   inverted: false,
   filename: null,
   filesize: null,
@@ -8,7 +12,7 @@ const defaults = {
   fps: 0,
   // Process
   procDecimate: false,
-  procTargetTris: 1000,
+  procTargetTris: 800,
   procFlat: true,
   procTexSize: 'original',
   procTexFilter: 'nearest',
@@ -18,6 +22,8 @@ const defaults = {
   procCustom: ['#000000', '#ffffff', '#c12e1f', '#0a2989'],
   procDither: true,
   procDitherStrength: 1.0,
+  procTexLast: '128',
+  procPaletteLast: '15bit',
   procStats: null,
   procBusy: false,
   // Render

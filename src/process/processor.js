@@ -52,17 +52,20 @@ export class ModelProcessor {
 
   get hasModel() { return this.entries.length > 0; }
 
-  // Temporarily shows the unprocessed scan with plain Lambert shading.
-  withOriginal(fn) {
+  // Temporarily renders with plain Lambert shading: the unprocessed scan when
+  // `original` is true, otherwise the processed mesh and texture.
+  withClean(original, fn) {
     const saved = this.entries.map(e => [e.mesh.geometry, e.mesh.material]);
     for (const e of this.entries) {
-      if (!e.cleanMat) {
-        const u = e.mesh.material.uniforms;
-        e.cleanMat = new THREE.MeshLambertMaterial({ map: e.srcMap, color: e.srcMap ? 0xffffff : u.diffuse.value, toneMapped: false });
-      }
-      if (e.cleanMat.map !== e.srcMap) { e.cleanMat.map = e.srcMap; e.cleanMat.needsUpdate = true; }
-      e.mesh.geometry = e.srcGeo;
-      e.mesh.material = e.cleanMat;
+      const u = e.mesh.material.uniforms;
+      const map = original ? e.srcMap : (u.uHasMap.value ? u.map.value : null);
+      if (!e.cleanMat) e.cleanMat = new THREE.MeshLambertMaterial({ toneMapped: false });
+      const m = e.cleanMat;
+      if (m.map !== map) { m.map = map; m.needsUpdate = true; }
+      m.color.set(map ? 0xffffff : u.diffuse.value);
+      m.side = e.mesh.material.side;
+      if (original) e.mesh.geometry = e.srcGeo;
+      e.mesh.material = m;
     }
     try { fn(); } finally {
       this.entries.forEach((e, i) => { e.mesh.geometry = saved[i][0]; e.mesh.material = saved[i][1]; });

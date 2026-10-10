@@ -1,45 +1,30 @@
 import { store } from '../../store.js';
-import { PRESETS } from '../../export/preset.js';
 
 export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, onClearScene }) {
   el.innerHTML = `
     <div class="panel">
-      <span class="panel-section-label">Model</span>
-      <input type="file" id="inp-model" accept=".glb,.gltf,.obj,.fbx" hidden />
-      <label for="inp-model" class="btn btn-primary" style="display:block;text-align:center;cursor:pointer;">
-        Load Model (.glb / .obj / .fbx)
-      </label>
-      <div class="file-info" id="file-info" style="display:none;">
-        <span id="fi-name"></span><span id="fi-size"></span>
-      </div>
-      <input type="file" id="inp-tex" accept="image/*" hidden />
-      <label for="inp-tex" class="btn btn-ghost" style="display:block;text-align:center;cursor:pointer;">
-        Load Texture Map
-      </label>
-
-      <span class="panel-section-label">Environment Assets</span>
-      <input type="file" id="inp-hdri" accept=".hdr" hidden />
-      <label for="inp-hdri" class="btn btn-ghost" style="display:block;text-align:center;cursor:pointer;">
-        Load HDRI / Skybox
-      </label>
-
-      <span class="panel-section-label">Scene</span>
-      <div class="panel-row">
-        <label for="inp-preset">Look Preset</label>
-        <div class="row-right">
-          <select id="inp-preset">
-            <option value="custom" ${store.get('lookPreset') === 'custom' ? 'selected' : ''}>Custom</option>
-            ${[...new Set(Object.values(PRESETS).map(p => p.group))].map(g => `
-              <optgroup label="${g}">
-                ${Object.entries(PRESETS).filter(([, p]) => p.group === g).map(([k, p]) =>
-                  `<option value="${k}" ${store.get('lookPreset') === k ? 'selected' : ''}>${p.label}</option>`).join('')}
-              </optgroup>`).join('')}
-          </select>
+      <section class="card">
+        <header class="card-head"><h3 class="card-title">Model</h3><p class="card-hint">GLB, OBJ or FBX — or drop a file on the viewport</p></header>
+        <div class="card-body">
+          <input type="file" id="inp-model" accept=".glb,.gltf,.obj,.fbx" hidden />
+          <label for="inp-model" class="btn btn-primary btn-file">Load Model</label>
+          <div class="file-info" id="file-info" style="display:none;">
+            <span id="fi-name"></span><span id="fi-size"></span>
+          </div>
+          <input type="file" id="inp-tex" accept="image/*" hidden />
+          <label for="inp-tex" class="btn btn-ghost btn-file">Load Texture Map<small class="btn-sub">for OBJ scans with a separate image</small></label>
         </div>
-      </div>
-      <button class="btn btn-ghost" id="btn-clear" style="margin-top:8px;">
-        🗑 Clear Scene
-      </button>
+      </section>
+
+      <section class="card">
+        <header class="card-head"><h3 class="card-title">Environment</h3><p class="card-hint">Optional HDRI background and lighting</p></header>
+        <div class="card-body">
+          <input type="file" id="inp-hdri" accept=".hdr" hidden />
+          <label for="inp-hdri" class="btn btn-ghost btn-file">Load HDRI (.hdr)</label>
+        </div>
+      </section>
+
+      <button class="btn btn-ghost btn-small" id="btn-clear">Clear Scene</button>
     </div>
   `;
 
@@ -58,7 +43,6 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
     e.target.value = '';
   });
 
-  const unsubPreset = store.subscribe('lookPreset', v => { el.querySelector('#inp-preset').value = v; });
   el.querySelector('#btn-clear').addEventListener('click', () => {
     if (confirm('Clear scene? This will remove all loaded models.')) onClearScene();
   });
@@ -72,5 +56,5 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
     }
   });
 
-  return () => { unsubPreset(); unsubFile(); };
+  return () => unsubFile();
 }

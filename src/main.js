@@ -7,14 +7,12 @@ import { initTheme } from './ui/theme.js';
 import { buildTopbar } from './ui/topbar.js';
 import { buildTabs } from './ui/sidebar/tabs.js';
 import { buildImportPanel } from './ui/sidebar/importPanel.js';
-import { buildRenderPanel } from './ui/sidebar/renderPanel.js';
 import { buildProcessPanel } from './ui/sidebar/processPanel.js';
+import { buildLookPanel } from './ui/sidebar/lookPanel.js';
 import { ModelProcessor } from './process/processor.js';
-import { buildEnvironmentPanel } from './ui/sidebar/environmentPanel.js';
-import { buildCameraPanel } from './ui/sidebar/cameraPanel.js';
-import { buildEffectsPanel } from './ui/sidebar/effectsPanel.js';
 import { buildExportPanel } from './ui/sidebar/exportPanel.js';
-import { loadPresetFromURL, applyPreset, getPresetData } from './export/preset.js';
+import { buildPipelineBar } from './ui/pipelineBar.js';
+import { loadPresetFromURL, getPresetData } from './export/preset.js';
 import { saveViewerHtml } from './export/saveHtml.js';
 import { collectFaces, assignFilaments, build3mf, download3mf } from './export/print3mf.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -87,32 +85,29 @@ function showPanel(tab) {
     });
   } else if (tab === 'process') {
     panelCleanup = buildProcessPanel(div, {
-      onReset: () => showPanel('process'),
       onRerunFresh: () => { processor.clearCache(); scheduleProcess(); },
       onCopyMetrics: copyMetrics,
     });
-  } else if (tab === 'render') {
-    buildRenderPanel(div, { onReset: () => showPanel('render') });
-  } else if (tab === 'environment') {
-    buildEnvironmentPanel(div, {
-      onBgTypeChange: applyBackground,
-      onBgImageLoad: handleBgImageLoad,
-      onReset: () => showPanel('environment'),
+  } else if (tab === 'look') {
+    const scroll = panelContent.scrollTop;
+    panelCleanup = buildLookPanel(div, {
+      environment: { onBgTypeChange: applyBackground, onBgImageLoad: handleBgImageLoad },
+      camera: {
+        onProjectionChange: (type) => { sc.setCamera(type); pipeline.camera = sc.camera; },
+        onResetView: () => sc.resetView(),
+      },
+      onRebuild: () => showPanel('look'),
     });
-  } else if (tab === 'camera') {
-    buildCameraPanel(div, {
-      onProjectionChange: (type) => { sc.setCamera(type); pipeline.camera = sc.camera; },
-      onResetView: () => sc.resetView(),
-      onReset: () => showPanel('camera'),
-    });
-  } else if (tab === 'effects') {
-    buildEffectsPanel(div, { onReset: () => showPanel('effects') });
+    panelContent.scrollTop = scroll;
   } else if (tab === 'export') {
     buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExport3mf: handleExport3mf, onExportGlb: handleExportGlb });
   }
 }
 
-buildTabs(document.getElementById('tab-strip'), showPanel);
+if (!['import', 'process', 'look', 'export'].includes(store.get('activeTab'))) store.set('activeTab', 'import');
+buildTabs(document.getElementById('tab-strip'));
+buildPipelineBar(document.getElementById('pipeline-bar'));
+store.subscribe('activeTab', tab => { panelContent.scrollTop = 0; showPanel(tab); });
 showPanel(store.get('activeTab'));
 
 // ── Camera toolbar ────────────────────────────────────────────────────────────
@@ -248,12 +243,27 @@ store.subscribe('compareSplit', layoutCompare);
 window.addEventListener('resize', () => { if (store.get('compare')) layoutCompare(); });
 
 const cleanBg = new THREE.Color();
+
+// Full-frame plain shading of the processed model (Look switched off).
+function renderClean() {
+  const r = sc.renderer;
+  processor.withClean(false, () => {
+    const prevCS = r.outputColorSpace, prevBg = sc.scene.background;
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    if (prevBg?.isColor) sc.scene.background = cleanBg.set(store.get('bgColor'));
+    r.setRenderTarget(null);
+    r.render(sc.scene, sc.camera);
+    r.outputColorSpace = prevCS;
+    sc.scene.background = prevBg;
+  });
+}
+
 function renderCompareOriginal() {
   const r = sc.renderer;
   const w = canvas.clientWidth, h = canvas.clientHeight;
   const split = Math.round(w * store.get('compareSplit'));
   if (split <= 0) return;
-  processor.withOriginal(() => {
+  processor.withClean(true, () => {
     const prevCS = r.outputColorSpace, prevBg = sc.scene.background;
     r.outputColorSpace = THREE.SRGBColorSpace;
     if (prevBg?.isColor) sc.scene.background = cleanBg.set(store.get('bgColor'));
@@ -292,6 +302,8 @@ store.subscribe('projection', () => updateToolbarProj());
 
 // ── Model loading ─────────────────────────────────────────────────────────────
 async function handleLoadModel(file) {
+  const t0 = performance.now();
+  store.setMany({ loadBusy: true, loadMs: null });
   try {
     const obj = await loadModel(file);
     handleClearScene(false);
@@ -310,10 +322,14 @@ async function handleLoadModel(file) {
     });
 
     if (store.get('autoFrame')) sc.frameObject(obj);
+    store.set('loadMs', performance.now() - t0);
+    store.set('loadBusy', false);
     await runProcess();
   } catch (e) {
     console.error('Load error:', e);
     alert(`Failed to load model: ${e.message}`);
+  } finally {
+    store.set('loadBusy', false);
   }
 }
 
@@ -365,7 +381,13 @@ async function runProcess() {
   procRunning = true;
   store.set('procBusy', true);
   // Let the "Processing…" status paint before the synchronous heavy work.
-  await new Promise(r => setTimeout(r, 30));
+  // Frames stop when the page is hidden, so a timer caps the wait.
+  if (!document.hidden) {
+    await Promise.race([
+      new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),
+      new Promise(r => setTimeout(r, 100)),
+    ]);
+  }
   try {
     const s = store.state;
     const stats = await processor.run({
@@ -571,11 +593,6 @@ function syncEnv() {
   pipeline.updateLights(sc.ambientLight, sc.keyLight);
 }
 
-// ── Import preset select ──────────────────────────────────────────────────────
-document.addEventListener('change', e => {
-  if (e.target.id === 'inp-preset' && e.target.value !== 'custom') applyPreset(e.target.value);
-});
-
 // ── HUD update ────────────────────────────────────────────────────────────────
 const hudScene = document.getElementById('hud-scene');
 const hudTris  = document.getElementById('hud-tris');
@@ -646,7 +663,8 @@ requestAnimationFrame(animate);
     sc.scene.overrideMaterial = null;
   }
 
-  pipeline.render(time * 0.001);
+  if (s.lookEnabled) pipeline.render(time * 0.001);
+  else renderClean();
   if (s.compare && processor.hasModel) renderCompareOriginal();
 
   // Full-resolution overlays: depth-test against the prepass depth so the

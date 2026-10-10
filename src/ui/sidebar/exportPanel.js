@@ -8,89 +8,105 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
 
   el.innerHTML = `
     <div class="panel">
-      <span class="panel-section-label">Image</span>
-      <button class="btn btn-primary" id="btn-snapshot">Snapshot PNG</button>
-      <div class="panel-row">
-        <label for="sel-snapres">Resolution</label>
-        <div class="row-right">
-          <select id="sel-snapres">
-            <option value="native" ${s.snapshotRes === 'native' ? 'selected' : ''}>Native</option>
-            <option value="2x" ${s.snapshotRes === '2x' ? 'selected' : ''}>2×</option>
-            <option value="4x" ${s.snapshotRes === '4x' ? 'selected' : ''}>4×</option>
-          </select>
+      <section class="card">
+        <header class="card-head"><h3 class="card-title">Image</h3><p class="card-hint">PNG of the current view</p></header>
+        <div class="card-body">
+          <div class="panel-row">
+            <label for="sel-snapres">Resolution</label>
+            <div class="row-right">
+              <select id="sel-snapres">
+                <option value="native" ${s.snapshotRes === 'native' ? 'selected' : ''}>Native</option>
+                <option value="2x" ${s.snapshotRes === '2x' ? 'selected' : ''}>2×</option>
+                <option value="4x" ${s.snapshotRes === '4x' ? 'selected' : ''}>4×</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="btn-snapshot">Save Snapshot</button>
         </div>
-      </div>
+      </section>
 
-      <span class="panel-section-label">Video</span>
-      <div class="panel-row">
-        <label for="sel-vidres">Resolution</label>
-        <div class="row-right">
-          <select id="sel-vidres">
-            <option value="native" ${s.videoRes === 'native' ? 'selected' : ''}>Native</option>
-            <option value="2x" ${s.videoRes === '2x' ? 'selected' : ''}>2×</option>
-            <option value="4x" ${s.videoRes === '4x' ? 'selected' : ''}>4×</option>
-          </select>
+      <section class="card">
+        <header class="card-head"><h3 class="card-title">Video</h3><p class="card-hint">Turntable recording (WebM)</p></header>
+        <div class="card-body">
+          <div class="panel-row">
+            <label for="sel-vidres">Resolution</label>
+            <div class="row-right">
+              <select id="sel-vidres">
+                <option value="native" ${s.videoRes === 'native' ? 'selected' : ''}>Native</option>
+                <option value="2x" ${s.videoRes === '2x' ? 'selected' : ''}>2×</option>
+                <option value="4x" ${s.videoRes === '4x' ? 'selected' : ''}>4×</option>
+              </select>
+            </div>
+          </div>
+          <div class="panel-row">
+            <label for="inp-duration">Duration (sec)</label>
+            <div class="row-right">
+              <input type="number" id="inp-duration" min="1" max="60" step="1" value="${s.exportDuration}" />
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-ghost" id="btn-record">Record Duration</button>
+            <button class="btn btn-ghost" id="btn-record-loop" title="Records exactly one full turntable rotation">Record One Loop</button>
+          </div>
+          <div class="record-progress" id="record-progress" hidden>
+            <div class="record-progress-track">
+              <div class="record-progress-fill" id="record-progress-fill"></div>
+            </div>
+            <span class="record-progress-label" id="record-progress-label">0%</span>
+          </div>
         </div>
-      </div>
-      <div class="panel-row">
-        <label for="inp-duration">Duration (sec)</label>
-        <div class="row-right">
-          <input type="number" id="inp-duration" min="1" max="60" step="1" value="${s.exportDuration}" />
-        </div>
-      </div>
-      <button class="btn btn-ghost" id="btn-record">Record Turntable (WebM)</button>
-      <button class="btn btn-ghost" id="btn-record-loop" title="Records exactly one full turntable rotation">
-        Record One Loop
-      </button>
-      <div class="record-progress" id="record-progress" hidden>
-        <div class="record-progress-track">
-          <div class="record-progress-fill" id="record-progress-fill"></div>
-        </div>
-        <span class="record-progress-label" id="record-progress-label">0%</span>
-      </div>
+      </section>
 
-      <span class="panel-section-label">Fabrication</span>
-      <div class="panel-row">
-        <label for="inp-printheight">Print Height (mm)</label>
-        <div class="row-right">
-          <input type="number" id="inp-printheight" min="5" max="400" step="1" value="${s.printHeight}" />
+      <section class="card">
+        <header class="card-head"><h3 class="card-title">3D print</h3><p class="card-hint">Multi-color 3MF for Bambu Studio, Orca, PrusaSlicer</p></header>
+        <div class="card-body">
+          <div class="panel-row">
+            <label for="inp-printheight">Print height (mm)</label>
+            <div class="row-right">
+              <input type="number" id="inp-printheight" min="5" max="400" step="1" value="${s.printHeight}" />
+            </div>
+          </div>
+          <div class="panel-row">
+            <label for="sel-filaments">Filaments<small class="proc-hint">Used when the Process palette is skipped or 15-bit</small></label>
+            <div class="row-right">
+              <select id="sel-filaments">
+                ${[2, 3, 4, 5, 6, 8, 12, 16].map(n => `<option value="${n}" ${s.printFilaments === n ? 'selected' : ''}>${n}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="panel-row">
+            <label for="sel-minisland">Merge color specks<small class="proc-hint">Recolor patches smaller than N faces</small></label>
+            <div class="row-right">
+              <select id="sel-minisland">
+                ${[[0, 'Off'], [2, '2 faces'], [4, '4 faces'], [8, '8 faces'], [16, '16 faces'], [32, '32 faces']].map(([n, l]) => `<option value="${n}" ${s.printMinIsland === n ? 'selected' : ''}>${l}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="panel-row">
+            <label for="sw-closeholes">Close holes<small class="proc-hint">Cap open scan boundaries so the mesh is watertight</small></label>
+            <div class="row-right">
+              <label class="switch-wrap" for="sw-closeholes" aria-label="Close holes">
+                <input type="checkbox" id="sw-closeholes" role="switch" ${s.printCloseHoles ? 'checked' : ''} />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="btn-3mf">Export 3MF</button>
+          <div class="proc-status" id="print-status" aria-live="polite"></div>
         </div>
-      </div>
-      <div class="panel-row">
-        <label for="sel-filaments">Filaments<small class="proc-hint">Used when Process palette is Off or 15-bit</small></label>
-        <div class="row-right">
-          <select id="sel-filaments">
-            ${[2, 3, 4, 5, 6, 8, 12, 16].map(n => `<option value="${n}" ${s.printFilaments === n ? 'selected' : ''}>${n}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <div class="panel-row">
-        <label for="sel-minisland">Merge Color Specks<small class="proc-hint">Recolor patches smaller than N faces</small></label>
-        <div class="row-right">
-          <select id="sel-minisland">
-            ${[[0, 'Off'], [2, '2 faces'], [4, '4 faces'], [8, '8 faces'], [16, '16 faces'], [32, '32 faces']].map(([n, l]) => `<option value="${n}" ${s.printMinIsland === n ? 'selected' : ''}>${l}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <div class="panel-row">
-        <label for="sw-closeholes">Close Holes<small class="proc-hint">Cap open scan boundaries so the mesh is watertight</small></label>
-        <div class="row-right">
-          <label class="switch-wrap" for="sw-closeholes" aria-label="Close holes">
-            <input type="checkbox" id="sw-closeholes" role="switch" ${s.printCloseHoles ? 'checked' : ''} />
-            <span class="switch-track"><span class="switch-thumb"></span></span>
-          </label>
-        </div>
-      </div>
-      <button class="btn btn-primary" id="btn-3mf">Export 3MF (multi-color)</button>
-      <div class="proc-status" id="print-status" aria-live="polite"></div>
+      </section>
 
-      <span class="panel-section-label">Model</span>
-      <button class="btn btn-ghost" id="btn-glb">Export Processed GLB</button>
-
-      <span class="panel-section-label">Share</span>
-      <button class="btn btn-primary" id="btn-save-html">Save as HTML</button>
-      <button class="btn btn-ghost" id="btn-viewer">Viewer Mode</button>
-      <button class="btn btn-ghost" id="btn-share">Copy Preset Link</button>
+      <section class="card">
+        <header class="card-head"><h3 class="card-title">Share</h3><p class="card-hint">Interactive viewer and processed model</p></header>
+        <div class="card-body">
+          <button class="btn btn-primary" id="btn-save-html">Save as HTML viewer</button>
+          <div class="btn-row">
+            <button class="btn btn-ghost" id="btn-glb">Processed GLB</button>
+            <button class="btn btn-ghost" id="btn-viewer">Viewer Mode</button>
+            <button class="btn btn-ghost" id="btn-share">Preset Link</button>
+          </div>
+        </div>
+      </section>
     </div>
   `;
 
