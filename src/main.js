@@ -63,7 +63,7 @@ function addDefaultCube() {
 addDefaultCube();
 
 // ── UI ────────────────────────────────────────────────────────────────────────
-buildTopbar(document.getElementById('topbar'), { onViewerMode: enterViewerMode });
+buildTopbar(document.getElementById('topbar'));
 
 const panelContent = document.getElementById('panel-content');
 
@@ -148,6 +148,12 @@ toolbar.innerHTML = `
     <button data-val="perspective">Persp</button>
     <button data-val="orthographic">Ortho</button>
   </div>
+  <div class="tb-divider"></div>
+  <button class="tb-btn" id="tb-viewer" aria-label="Viewer mode" aria-pressed="false" title="Viewer mode — hide the editor">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z"/><circle cx="8" cy="8" r="2"/>
+    </svg>
+  </button>
 `;
 
 function updateToolbarProj() {
@@ -282,6 +288,19 @@ toolbar.querySelector('#tb-play').addEventListener('click', () => {
   store.set('turntable', !store.get('turntable'));
 });
 document.getElementById('viewer-exit').addEventListener('click', exitViewerMode);
+const tbViewer = toolbar.querySelector('#tb-viewer');
+tbViewer.addEventListener('click', () => {
+  if (document.documentElement.hasAttribute('data-viewer')) exitViewerMode(); else enterViewerMode();
+});
+// Keep the toolbar button in sync however viewer mode is entered or left.
+function syncViewerButton() {
+  const on = document.documentElement.hasAttribute('data-viewer');
+  tbViewer.classList.toggle('active', on);
+  tbViewer.setAttribute('aria-pressed', String(on));
+  tbViewer.title = on ? 'Back to the editor' : 'Viewer mode — hide the editor';
+}
+new MutationObserver(syncViewerButton).observe(document.documentElement, { attributes: true, attributeFilter: ['data-viewer'] });
+syncViewerButton();
 toolbar.querySelector('#tb-proj').querySelectorAll('button').forEach(btn => {
   btn.addEventListener('click', () => {
     store.set('projection', btn.dataset.val);
