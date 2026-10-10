@@ -667,8 +667,7 @@ hudTris.textContent = '  ' + store.get('tris').toLocaleString();
 let lastTime = performance.now(), frameCount = 0, fpsTimer = 0;
 
 function animate(time) {
-  runProcess();
-requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
   // Clamp to 100ms max so a tab coming back from sleep doesn't spin wildly.
   const delta = Math.min((time - lastTime) / 1000, 0.1);
   lastTime = time;
