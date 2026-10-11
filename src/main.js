@@ -320,10 +320,20 @@ const cleanBg = new THREE.Color();
 // Three's standard materials divide light by π; the PSX shader does not. Clean
 // passes (original, Look off, print preview) scale the lights up so both use
 // the same brightness for the same light settings.
+// The PSX shader also reads the key direction in view space, so plain passes
+// place the key relative to the camera to light the model the same way.
+const savedKeyPos = new THREE.Vector3();
 function cleanLights(on) {
   const k = on ? Math.PI : 1 / Math.PI;
   sc.ambientLight.intensity *= k;
   sc.keyLight.intensity *= k;
+  if (on) {
+    savedKeyPos.copy(sc.keyLight.position);
+    sc.keyLight.position.copy(savedKeyPos).applyQuaternion(sc.camera.quaternion);
+  } else {
+    sc.keyLight.position.copy(savedKeyPos);
+  }
+  sc.keyLight.updateMatrixWorld();
 }
 
 // Full-frame plain shading of the processed model (Look switched off).
@@ -577,7 +587,7 @@ function metricsRow(extra = {}) {
     srcTris: st.srcTris, tris: st.tris, charts: st.charts,
     atlasCoverage: st.coverage != null ? +(st.coverage * 100).toFixed(2) : null,
     texture: st.texW ? `${st.texW}x${st.texH}` : null,
-    colors: st.colors, palette: st.palette,
+    colorsUsed: st.colors, palette: st.palette,
     totalMs: st.ms, ...Object.fromEntries(Object.entries(st.timings).map(([k, v]) => [`${k}Ms`, v])),
     ...extra,
     ...settings,

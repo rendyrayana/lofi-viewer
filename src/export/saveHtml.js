@@ -667,6 +667,9 @@ const cleanBg = new THREE.Color(BG_COLOR);
 function renderClean() {
   const bg = scene.background;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // View-relative key, as the PSX shader and the editor use.
+  keyLight.position.set(2, 3, 2).applyQuaternion(camera.quaternion);
+  keyLight.updateMatrixWorld();
   if (bg?.isColor) scene.background = cleanBg;
   renderer.setRenderTarget(null);
   renderer.render(scene, camera);
