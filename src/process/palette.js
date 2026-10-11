@@ -290,7 +290,10 @@ export function quantizeToPalette(img, hexColors, pattern = 'psx4', strength = 1
   const pal = hexColors.map(hexToRgb);
   const { data, width: W, height: H } = img;
   const out = new Uint8ClampedArray(data.length);
-  const spread = 255 / Math.max(2, Math.cbrt(pal.length) * 2);
+  // Ordered-dither amplitude: at strength 1 about a third of the palette's
+  // typical colour spacing, so dither softens banding without jumping whole
+  // palette steps. Strength 2 restores the full-step look.
+  const spread = (255 / Math.max(2, Math.cbrt(pal.length) * 2)) * 0.35;
   const nearest = makeColorMatcher(hexColors, mergeShades);
 
   if (dither && pattern === 'fs') {
@@ -300,7 +303,7 @@ export function quantizeToPalette(img, hexColors, pattern = 'psx4', strength = 1
       const k = nearest(clamp(buf[i]), clamp(buf[i + 1]), clamp(buf[i + 2]));
       for (let c = 0; c < 3; c++) {
         out[i + c] = pal[k][c];
-        diffuse(buf, W, H, x, y, c, (buf[i + c] - pal[k][c]) * strength);
+        diffuse(buf, W, H, x, y, c, (buf[i + c] - pal[k][c]) * strength * 0.6);
       }
       out[i + 3] = data[i + 3];
     }

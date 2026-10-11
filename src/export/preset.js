@@ -142,7 +142,7 @@ export const LOOK_PRESETS = {
 // Process targets: era-typical per-model budgets. They only fill in the
 // Process steps, where every value stays visible and editable.
 export const PROCESS_TARGETS = {
-  ps1:       { label: 'PS1',       settings: { procDecimate: true, procTargetTris: 800,  procTexSize: '128', procTexMode: 'fixed', procPalette: 'clut4', procDither: true } },
+  ps1:       { label: 'PS1',       settings: { procDecimate: true, procTargetTris: 800,  procTexSize: '128', procTexMode: 'fixed', procPalette: 'clut4', procDither: false } },
   n64:       { label: 'N64',       settings: { procDecimate: true, procTargetTris: 1500, procTexSize: '64',  procTexMode: 'fixed', procPalette: '15bit', procDither: true } },
   saturn:    { label: 'Saturn',    settings: { procDecimate: true, procTargetTris: 800,  procTexSize: '64',  procTexMode: 'fixed', procPalette: '15bit', procDither: false } },
   dreamcast: { label: 'Dreamcast', settings: { procDecimate: true, procTargetTris: 3000, procTexSize: '256', procTexMode: 'fixed', procPalette: '15bit', procDither: true } },
