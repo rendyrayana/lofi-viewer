@@ -83,6 +83,8 @@ function showPanel(tab) {
       onLoadTexture: handleLoadTexture,
       onLoadHDRI: handleLoadHDRI,
       onClearScene: handleClearScene,
+      pairBatchFiles,
+      onRunBatch: runBatch,
     });
   } else if (tab === 'process') {
     panelCleanup = buildProcessPanel(div, {
@@ -389,7 +391,7 @@ store.subscribe('rotationSpeed', v => {
 store.subscribe('projection', () => updateToolbarProj());
 
 // ── Model loading ─────────────────────────────────────────────────────────────
-async function handleLoadModel(file) {
+async function handleLoadModel(file, { quiet = false } = {}) {
   const t0 = performance.now();
   store.setMany({ loadBusy: true, loadMs: null });
   try {
@@ -415,6 +417,7 @@ async function handleLoadModel(file) {
     await runProcess();
   } catch (e) {
     console.error('Load error:', e);
+    if (quiet) throw e;
     alert(`Failed to load model: ${e.message}`);
   } finally {
     store.set('loadBusy', false);
@@ -533,33 +536,116 @@ function gpuName() {
   return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
 }
 
-async function copyMetrics(format) {
+// One row of reproducible measurements for the current model and settings.
+function metricsRow(extra = {}) {
   const st = store.get('procStats');
-  if (!st) return false;
+  if (!st) return null;
   const settings = Object.fromEntries(PANEL_KEYS.process.map(k => [k.replace(/^proc/, '').replace(/^./, c => c.toLowerCase()), store.get(k)]));
-  const row = {
+  return {
     model: store.get('filename') || 'default-cube',
+    loadMs: store.get('loadMs') != null ? Math.round(store.get('loadMs')) : null,
     srcTris: st.srcTris, tris: st.tris, charts: st.charts,
     atlasCoverage: st.coverage != null ? +(st.coverage * 100).toFixed(2) : null,
     texture: st.texW ? `${st.texW}x${st.texH}` : null,
     colors: st.colors, palette: st.palette,
     totalMs: st.ms, ...Object.fromEntries(Object.entries(st.timings).map(([k, v]) => [`${k}Ms`, v])),
+    ...extra,
     ...settings,
     gpu: gpuName(), cpuThreads: navigator.hardwareConcurrency, userAgent: navigator.userAgent,
     date: new Date().toISOString(),
   };
-  let text;
-  if (format === 'csv') {
-    const cell = v => {
-      const str = Array.isArray(v) ? v.join(' ') : String(v ?? '');
-      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-    };
-    text = Object.keys(row).join(',') + '\n' + Object.values(row).map(cell).join(',');
-  } else {
-    text = JSON.stringify(row, null, 2);
-  }
-  await navigator.clipboard.writeText(text);
+}
+
+function toCsv(rows) {
+  const cols = [...new Set(rows.flatMap(r => Object.keys(r)))];
+  const cell = v => {
+    const str = Array.isArray(v) ? v.join(' ') : String(v ?? '');
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+  return [cols.join(','), ...rows.map(r => cols.map(c => cell(r[c])).join(','))].join('\n');
+}
+
+async function copyMetrics(format) {
+  const row = metricsRow();
+  if (!row) return false;
+  await navigator.clipboard.writeText(format === 'csv' ? toCsv([row]) : JSON.stringify(row, null, 2));
   return true;
+}
+
+// Waits until no processing run is pending, running or queued.
+async function settleProcessing() {
+  clearTimeout(procTimer);
+  if (procTimer || procRunning || procQueued) {
+    procTimer = null;
+    if (!procRunning) runProcess();
+    await processingIdle();
+  }
+}
+
+// ── Batch: several scans, current settings, one CSV row each ─────────────────
+const IMAGE_FILE = /\.(png|jpe?g|webp|bmp)$/i, MODEL_FILE = /\.(glb|gltf|obj|fbx)$/i;
+const stem = name => name.replace(/\.[^.]+$/, '').toLowerCase();
+
+// Pairs each model with the texture image whose name matches it best.
+function pairBatchFiles(files) {
+  const models = files.filter(f => MODEL_FILE.test(f.name));
+  const images = files.filter(f => IMAGE_FILE.test(f.name));
+  return models.map(m => {
+    const ms = stem(m.name);
+    const tex = images.find(i => stem(i.name) === ms)
+      || images.find(i => stem(i.name).startsWith(ms) || ms.startsWith(stem(i.name)))
+      || (models.length === 1 && images.length === 1 ? images[0] : null);
+    return { model: m, texture: tex || null };
+  });
+}
+
+async function runBatch(pairs, outputs, onProgress) {
+  const rows = [];
+  for (let i = 0; i < pairs.length; i++) {
+    const { model, texture } = pairs[i];
+    onProgress(i, 'running');
+    const t0 = performance.now();
+    try {
+      await handleLoadModel(model, { quiet: true });
+      if (texture) await handleLoadTexture(texture);
+      await settleProcessing();
+      const extra = {};
+      if (outputs.obj || outputs.mf3) {
+        const { prepared, slots } = await buildPrintModel();
+        const ps = prepared.stats;
+        Object.assign(extra, {
+          printFaces: ps.triangles, filaments: slots.length,
+          printWatertight: !ps.openEdges && !ps.nonManifoldEdges,
+          printSizeMm: ps.sizeMm.map(v => v.toFixed(1)).join('x'),
+        });
+        const name = exportBaseName();
+        if (outputs.obj) {
+          const { obj, mtl, base } = buildObjMtl(prepared, slots, { name });
+          downloadFile(obj, `${base}.obj`, 'text/plain');
+          await new Promise(r => setTimeout(r, 400));
+          downloadFile(mtl, `${base}.mtl`, 'text/plain');
+          await new Promise(r => setTimeout(r, 400));
+        }
+        if (outputs.mf3) {
+          downloadFile(build3mf(prepared, slots, { name }), `${name}-lofi.3mf`, 'model/3mf');
+          await new Promise(r => setTimeout(r, 400));
+        }
+      }
+      if (outputs.glb) {
+        downloadFile(await buildProcessedGlb(), `${exportBaseName()}-lofi.glb`, 'model/gltf-binary');
+        await new Promise(r => setTimeout(r, 400));
+      }
+      rows.push(metricsRow({ texture_file: texture?.name ?? '', batchMs: Math.round(performance.now() - t0), ...extra }));
+      onProgress(i, 'done', performance.now() - t0);
+    } catch (e) {
+      console.error(`Batch: ${model.name} failed:`, e);
+      rows.push({ model: model.name, error: e.message });
+      onProgress(i, 'failed', performance.now() - t0, e.message);
+    }
+  }
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  downloadFile(toCsv(rows), `lofi-batch-${stamp}.csv`, 'text/csv');
+  return rows;
 }
 
 // ── Fabrication / model export ────────────────────────────────────────────────
@@ -569,12 +655,7 @@ function exportBaseName() {
 
 // Builds the coloured, cleaned print mesh from the current processed model.
 async function buildPrintModel() {
-  clearTimeout(procTimer);
-  if (procTimer || procRunning || procQueued) {
-    procTimer = null;
-    if (!procRunning) runProcess();
-    await processingIdle();
-  }
+  await settleProcessing();
   const s = store.state;
   const palOn = s.procPalette !== 'off';
   const fixed = ['preset', 'extract', 'custom', 'clut4', 'clut8'].includes(s.procPalette) ? processor.palette : null;
