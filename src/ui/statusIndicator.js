@@ -49,7 +49,7 @@ export function buildStatusIndicator(wrap) {
     const s = store.state, st = s.procStats;
     if (!st) {
       setStage('scan', 'no model', true);
-      ['dec', 'tex', 'pal'].forEach(id => setStage(id, '—', true));
+      ['dec', 'tex', 'pal'].forEach(id => setStage(id, '-', true));
     } else {
       setStage('scan', `${st.srcTris.toLocaleString()} tris`);
       setStage('dec', s.procDecimate ? `${st.tris.toLocaleString()} tris` : 'skipped', !s.procDecimate);

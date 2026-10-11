@@ -217,11 +217,11 @@ export function paintCode(state) {
 
 // Welds, closes holes, checks and cleans the coloured mesh, and converts it to
 // print space: Y-up scene → Z-up, millimetres, centred, resting on z = 0.
-//   smooth      — passes of a neighbour-majority filter that straightens
+//   smooth      : passes of a neighbour-majority filter that straightens
 //                 ragged colour boundaries
-//   minAreaMm2  — colour patches smaller than this (printed area) take the
+//   minAreaMm2  : colour patches smaller than this (printed area) take the
 //                 colour of the neighbour they share the most edges with
-//   contour     — passes of colour-field smoothing; > 0 cuts faces along
+//   contour     : passes of colour-field smoothing; > 0 cuts faces along
 //                 smooth colour boundaries instead of following triangle edges
 export function prepareMesh(parts, { heightMm = 60, minAreaMm2 = 0, smooth = 0, closeHoles = true, contour = 0 } = {}) {
   const box = new THREE.Box3();

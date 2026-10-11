@@ -51,9 +51,9 @@ export function rgbToHex([r, g, b]) {
 }
 
 // Resamples an RGBA image to w×h.
-//   nearest — the source pixel at each target texel centre
-//   box     — average of the source block
-//   edge    — block average, unless a sizeable share of the block is much darker
+//   nearest: the source pixel at each target texel centre
+//   box    : average of the source block
+//   edge   : block average, unless a sizeable share of the block is much darker
 //             than the average (outlines, eyes); then those dark pixels win, so
 //             thin dark detail survives heavy reduction
 export function downsample(src, w, h, method = 'nearest') {

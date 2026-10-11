@@ -5,7 +5,7 @@ const STORAGE_KEY = 'lofi-viewer-inverted';
 export function initTheme() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved !== null) {
-    // User has explicitly chosen — respect that
+    // User has explicitly chosen; respect that
     store.set('inverted', saved === 'true');
   } else {
     // No saved preference: follow the OS/browser color scheme

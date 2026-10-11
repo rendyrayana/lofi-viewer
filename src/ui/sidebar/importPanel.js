@@ -4,7 +4,7 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
   el.innerHTML = `
     <div class="panel">
       <section class="card">
-        <header class="card-head"><h3 class="card-title">Model</h3><p class="card-hint">GLB, OBJ or FBX — or drop a file on the viewport</p></header>
+        <header class="card-head"><h3 class="card-title">Model</h3><p class="card-hint">GLB, OBJ or FBX, or drop a file on the viewport</p></header>
         <div class="card-body">
           <input type="file" id="inp-model" accept=".glb,.gltf,.obj,.fbx" hidden />
           <label for="inp-model" class="btn btn-primary btn-file">Load Model</label>

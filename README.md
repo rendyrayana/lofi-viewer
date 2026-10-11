@@ -8,7 +8,7 @@ https://github.com/user-attachments/assets/a7d788d3-29b8-494b-99d8-9cc5905b555e
 
 ## Overview
 
-lofi-viewer is a browser-based tool that loads arbitrary 3D models and renders them through a PS1-style pipeline — low internal resolution, vertex snapping, affine texture warping, dithered 15-bit color, and optional CRT post-effects. It covers the full workflow from import to export: tweak the look in the editor, then save a standalone HTML viewer or record a turntable video.
+lofi-viewer is a browser-based tool that loads arbitrary 3D models and renders them through a PS1-style pipeline: low internal resolution, vertex snapping, affine texture warping, dithered 15-bit color, and optional CRT post-effects. It covers the full workflow from import to export: tweak the look in the editor, then save a standalone HTML viewer or record a turntable video.
 
 ## Features
 

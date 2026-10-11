@@ -37,7 +37,7 @@ export function buildLookPanel(el, { environment = {}, camera = {}, onRebuild } 
         </header>
         <div class="step-body">
           <div class="panel-row">
-            <label for="sel-look-preset">Preset<small class="proc-hint">Changes rendering only — Process stays as set</small></label>
+            <label for="sel-look-preset">Preset<small class="proc-hint">Changes rendering only. Process stays as set.</small></label>
             <div class="row-right">
               <select id="sel-look-preset">
                 <option value="custom" ${s.lookPreset === 'custom' ? 'selected' : ''}>Custom</option>
@@ -83,7 +83,7 @@ export function buildLookPanel(el, { environment = {}, camera = {}, onRebuild } 
     $('#sel-look-preset').value = LOOK_PRESETS[preset] ? preset : 'custom';
     $('#look-sum').textContent = on
       ? (LOOK_PRESETS[preset] ? LOOK_PRESETS[preset].label : 'Custom settings')
-      : 'Off — showing plain shading of the model';
+      : 'Off: showing plain shading of the model';
   }
 
   $('#sw-look').addEventListener('change', e => store.set('lookEnabled', e.target.checked));

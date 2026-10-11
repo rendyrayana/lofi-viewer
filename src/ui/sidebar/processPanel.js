@@ -57,7 +57,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
 
     el.innerHTML = `
       <div class="panel">
-        <p class="panel-intro">Each step is optional — switch off any you don't need. Changes apply automatically.</p>
+        <p class="panel-intro">Each step is optional. Switch off any you don't need. Changes apply automatically.</p>
 
         <span class="field-label" id="lbl-target">Start from a target <span class="field-label-note">optional</span></span>
         <div class="chip-row" role="group" aria-labelledby="lbl-target">
@@ -237,7 +237,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
           <div class="result-preview"><canvas id="preview" width="1" height="1" aria-label="Final texture preview"></canvas></div>
           <div class="result-info">
             <span class="field-label">Result texture</span>
-            <p class="result-line" id="result-line">—</p>
+            <p class="result-line" id="result-line">-</p>
           </div>
         </section>
 
@@ -372,7 +372,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
     if (mode === 'custom') {
       const cols = store.get('procCustom');
       box.innerHTML = cols.map((c, i) =>
-        `<input type="color" value="${c}" data-i="${i}" aria-label="Palette color ${i + 1}" title="${c} — right-click to remove" />`
+        `<input type="color" value="${c}" data-i="${i}" aria-label="Palette color ${i + 1}" title="${c}, right-click to remove" />`
       ).join('') + (cols.length < MAX_CUSTOM ? `<button class="swatch-btn" id="btn-addcolor" aria-label="Add color" title="Add color">+</button>` : '');
       box.querySelectorAll('input[type="color"]').forEach(inp => {
         inp.addEventListener('change', () => {
@@ -405,7 +405,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
       $('#sum-dec').textContent = 'Load a model to begin';
       $('#sum-tex').textContent = '';
       $('#sum-pal').textContent = '';
-      $('#proc-stats').innerHTML = '<dt>Model</dt><dd>—</dd>';
+      $('#proc-stats').innerHTML = '<dt>Model</dt><dd>-</dd>';
       $('#metrics-hint').textContent = '';
       return;
     }
@@ -429,7 +429,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
       ...(st.charts ? [['UV charts', st.charts.toLocaleString()]] : []),
       ...(st.coverage != null ? [['Atlas use', `${(st.coverage * 100).toFixed(1)}%`]] : []),
       ['Texture', st.texW ? `${st.texW}×${st.texH}` : 'none'],
-      ['Colors', st.colors ? st.colors.toLocaleString() : '—'],
+      ['Colors', st.colors ? st.colors.toLocaleString() : '-'],
       ['Total', `${st.ms} ms`],
     ];
     const stages = Object.entries(st.timings || {}).filter(([, v]) => v >= 0.1);

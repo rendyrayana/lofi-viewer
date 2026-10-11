@@ -13,7 +13,7 @@ function arrayBufferToBase64(buffer) {
 }
 
 export async function saveViewerHtml(modelFile, texFile = null, camState = null, { bgImage = null } = {}) {
-  if (!modelFile) { alert('No model loaded — load a model first.'); return; }
+  if (!modelFile) { alert('No model loaded. Load a model first.'); return; }
   const ext = modelFile.name.split('.').pop().toLowerCase();
   if (ext === 'fbx') {
     alert('FBX cannot be exported to HTML (its decoder is too large). Re-export your model as GLB first.');
@@ -59,7 +59,7 @@ function imageToDataUrl(img) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HTML template — everything inlined, no external dependencies except Three.js
+// HTML template: everything inlined, no external dependencies except Three.js
 // from cdn.jsdelivr.net (requires network on first open, then browser-cached).
 // ─────────────────────────────────────────────────────────────────────────────
 function buildHtml(modelB64, modelExt, settings, bgType, bgColor, texB64 = null, texMime = null, camState = null) {

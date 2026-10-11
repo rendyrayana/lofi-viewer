@@ -79,7 +79,7 @@ export function setupScene(canvas) {
     const fov = perspCamera.fov * (Math.PI / 180);
     // Fit vertically
     const distV = maxDim / (2 * Math.tan(fov / 2));
-    // Fit horizontally — at 45° azimuth the model projects √2 × wider
+    // Fit horizontally: at 45° azimuth the model projects √2 × wider
     const fovH = 2 * Math.atan(Math.tan(fov / 2) * perspCamera.aspect);
     const distH = (maxDim * Math.SQRT2) / (2 * Math.tan(fovH / 2));
     // Use the tighter constraint plus 2.2× breathing room

@@ -3,7 +3,7 @@ import { PSX_VERT, PSX_FRAG, DITHER_SHADER, CRT_SHADER, FX_SHADER, BLOOM_EXTRACT
 
 // Shared vertex shader for all screen-quad passes (ShaderMaterial).
 // Three.js injects 'position' (vec3) and 'uv' attributes automatically.
-// PlaneGeometry(2,2) has x,y ∈ [-1,1] — output directly as NDC to skip the camera.
+// PlaneGeometry(2,2) has x,y ∈ [-1,1], so output directly as NDC to skip the camera.
 const PASS_VERT = /* glsl */`
 varying vec2 vUv;
 void main() {
@@ -94,7 +94,7 @@ export class PSXPipeline {
     // Blit: nearest-upscale psxRT → rtA
     this.blitMat = makePassMat(BLIT_FRAG);
 
-    // Post passes — use the shaders from shaders.js directly
+    // Post passes: use the shaders from shaders.js directly
     // Clone uniform objects so we own them
     this.ditherUniforms = {
       tDiffuse: { value: null },
@@ -207,13 +207,13 @@ export class PSXPipeline {
         mat.uniforms.uHasMap.value = true;
         // Use white diffuse so the texture provides the color unmodified.
         // FBX/GLTF materials often have black or dark diffuse when they rely
-        // on a texture for color — multiplying black × texture = black.
+        // on a texture for color; multiplying black × texture = black.
         mat.uniforms.diffuse.value.set(1, 1, 1);
       } else if (originalMat.color) {
         const c = originalMat.color;
         const lum = c.r * 0.299 + c.g * 0.587 + c.b * 0.114;
         // Near-black: FBX materials that relied on a texture for color.
-        // Near-white: OBJ/FBX default material color (0xffffff) — not set by the artist.
+        // Near-white: OBJ/FBX default material color (0xffffff), not set by the artist.
         // Both fall back to a soft clay grey so the model is visible without textures.
         if (lum < 0.05 || lum > 0.9) {
           mat.uniforms.diffuse.value.set(0.4, 0.4, 0.4);

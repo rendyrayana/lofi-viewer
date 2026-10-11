@@ -301,7 +301,7 @@ cmpHandle.addEventListener('keydown', e => {
 function syncCompareUi() {
   const on = store.get('compare'), side = store.get('compareLayout') === 'side';
   compareEl.classList.toggle('is-side', side);
-  tbCompare.title = !on ? 'Compare with original (C)' : side ? 'Compare: side by side — click to turn off (C)' : 'Compare: split — click for side by side (C)';
+  tbCompare.title = !on ? 'Compare with original (C)' : side ? 'Compare: side by side, click to turn off (C)' : 'Compare: split, click for side by side (C)';
   if (on) layoutCompare();
 }
 store.subscribe('compareLayout', syncCompareUi);
@@ -740,7 +740,7 @@ async function handleExportPrint(format = '3mf') {
   if (st.facesSmoothed) lines.push(`Smoothed ${st.facesSmoothed.toLocaleString()} edge faces`);
   if (st.islandsMerged) lines.push(`Merged ${st.islandsMerged} color specks (${st.facesRecolored.toLocaleString()} faces)`);
   if (st.openEdges || st.nonManifoldEdges) {
-    lines.push(`Warning: not watertight — ${st.openEdges} open, ${st.nonManifoldEdges} non-manifold edges. The slicer may need to repair it.`);
+    lines.push(`Warning: not watertight: ${st.openEdges} open, ${st.nonManifoldEdges} non-manifold edges. The slicer may need to repair it.`);
   } else {
     lines.push('Watertight ✓');
   }
@@ -790,7 +790,7 @@ const VIDEO_SIZES = { '1080p': [1920, 1080], '4k': [3840, 2160] };
 
 // One exact camera revolution, rendered frame by frame and encoded to MP4.
 // layout: 'single' (processed view) or 'side' (original | processed).
-// size: 'native' (viewport pixels), '1080p' or '4k' — rendered off-screen.
+// size: 'native' (viewport pixels), '1080p' or '4k', rendered off-screen.
 // The camera keeps its elevation but is re-framed so the model fills the
 // frame (or each half, side by side).
 async function recordTurntableVideo({ seconds = 8, fps = 30, layout = 'single', size = '1080p', onProgress } = {}) {
@@ -954,7 +954,7 @@ async function handleExportGlb() {
 
 // The HTML viewer embeds the processed model, so it matches the editor.
 async function handleSaveHtml() {
-  if (!processor.hasModel || !loadedModel) { alert('No model loaded — load a model first.'); return; }
+  if (!processor.hasModel || !loadedModel) { alert('No model loaded. Load a model first.'); return; }
   try {
     const glb = await buildProcessedGlb();
     const file = new File([glb], `${exportBaseName()}.glb`, { type: 'model/gltf-binary' });
@@ -1040,10 +1040,10 @@ const hudTris  = document.getElementById('hud-tris');
 const hudRes   = document.getElementById('hud-res');
 const hudFps   = document.getElementById('hud-fps');
 
-store.subscribe('filename', v => { hudScene.textContent = '  ' + (v || '—'); });
+store.subscribe('filename', v => { hudScene.textContent = '  ' + (v || '-'); });
 store.subscribe('tris', v => { hudTris.textContent = '  ' + v.toLocaleString(); });
 // Initialize HUD from current store (subscriptions fire for future changes only)
-hudScene.textContent = '  ' + (store.get('filename') || '—');
+hudScene.textContent = '  ' + (store.get('filename') || '-');
 hudTris.textContent = '  ' + store.get('tris').toLocaleString();
 
 // ── Render loop ───────────────────────────────────────────────────────────────
@@ -1190,7 +1190,7 @@ const dropHint = document.createElement('div');
 dropHint.id = 'drop-hint';
 dropHint.innerHTML = `
   <p class="dh-title">Drop a 3D scan here</p>
-  <p class="dh-sub">OBJ, GLB or FBX — drop the texture image together with it</p>`;
+  <p class="dh-sub">OBJ, GLB or FBX. Drop the texture image together with it.</p>`;
 viewport.appendChild(dropHint);
 const syncDropHint = () => { dropHint.hidden = !!store.get('filename'); };
 store.subscribe('filename', syncDropHint);
