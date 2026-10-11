@@ -70,7 +70,7 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
             </div>
           </div>
           <div class="panel-row">
-            <label for="sel-filaments">Filaments<small class="proc-hint">Used when the Process palette is skipped, 15-bit, or has more than 16 colors</small></label>
+            <label for="sel-filaments">Max filaments<small class="proc-hint">Larger palettes are reduced to this many colors</small></label>
             <div class="row-right">
               <select id="sel-filaments">
                 ${[2, 3, 4, 5, 6, 8, 12, 16].map(n => `<option value="${n}" ${s.printFilaments === n ? 'selected' : ''}>${n}</option>`).join('')}

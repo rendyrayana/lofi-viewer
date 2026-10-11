@@ -607,6 +607,9 @@ async function runBatch(pairs, outputs, onProgress) {
       await handleLoadModel(model, { quiet: true });
       if (texture) await handleLoadTexture(texture);
       await settleProcessing();
+      // One clean, fully timed run per scan so every stage appears in the CSV.
+      processor.clearCache();
+      await runProcess();
       const extra = {};
       if (outputs.obj || outputs.mf3) {
         const { prepared, slots } = await buildPrintModel();
@@ -614,6 +617,7 @@ async function runBatch(pairs, outputs, onProgress) {
         Object.assign(extra, {
           printFaces: ps.triangles, filaments: slots.length,
           printWatertight: !ps.openEdges && !ps.nonManifoldEdges,
+          printOpenEdges: ps.openEdges, printNonManifoldEdges: ps.nonManifoldEdges, printHolesClosed: ps.holesClosed,
           printSizeMm: ps.sizeMm.map(v => v.toFixed(1)).join('x'),
         });
         const name = exportBaseName();

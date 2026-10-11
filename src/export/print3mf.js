@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import { zipSync, strToU8 } from 'fflate';
 import { extractPalette, hexToRgb, makeColorMatcher } from '../process/palette.js';
 import { makeProjector } from '../process/bake.js';
-
-const MAX_PALETTE_FILAMENTS = 16;
+import { dropFins } from '../process/decimate.js';
 
 // Barycentric sample points per triangle for the face-colour majority vote.
 const SAMPLES = [
@@ -24,9 +23,9 @@ export function collectFaces(processor, {
 } = {}) {
   const sources = processor.entries.map(e => faceColorSource(e, saturation, contrast));
 
-  // Filament colours: the active palette, or colours extracted from the scan
-  // when there is none (or it has more entries than a printer can load).
-  let pal = palette?.length && palette.length <= MAX_PALETTE_FILAMENTS ? palette.slice() : null;
+  // Filament colours: the active palette when it fits the filament limit,
+  // otherwise maxFilaments colours extracted from the scan.
+  let pal = palette?.length && palette.length <= maxFilaments ? palette.slice() : null;
   if (!pal) {
     const samples = [];
     const rgb = [0, 0, 0];
@@ -232,7 +231,9 @@ export function prepareMesh(parts, { heightMm = 60, minAreaMm2 = 0, smooth = 0, 
 
   const check = { openEdges: 0, nonManifoldEdges: 0, islandsMerged: 0, facesRecolored: 0, facesSmoothed: 0, holesClosed: 0 };
   const meshes = parts.map(p => {
-    const { verts, tris } = weld(p.positions, p.slot);
+    const welded = weld(p.positions, p.slot);
+    const verts = welded.verts;
+    const tris = removeFins(welded.tris);
     if (closeHoles) check.holesClosed += fillHoles(verts, tris);
     const world = Float64Array.from(verts);
     const out = new Float64Array(verts.length);
@@ -259,6 +260,20 @@ export function prepareMesh(parts, { heightMm = 60, minAreaMm2 = 0, smooth = 0, 
     meshes,
     stats: { triangles: meshes.reduce((s, m) => s + m.tris.length / 4, 0), sizeMm: [size.x * k, size.z * k, size.y * k], ...check },
   };
+}
+
+// dropFins on [v1, v2, v3, slot] triangles, keeping each survivor's slot.
+function removeFins(tris) {
+  const idx = new Uint32Array(tris.length / 4 * 3);
+  const slotOf = new Map();
+  for (let f = 0; f < tris.length / 4; f++) {
+    idx[f * 3] = tris[f * 4]; idx[f * 3 + 1] = tris[f * 4 + 1]; idx[f * 3 + 2] = tris[f * 4 + 2];
+    slotOf.set(`${tris[f * 4]},${tris[f * 4 + 1]},${tris[f * 4 + 2]}`, tris[f * 4 + 3]);
+  }
+  const kept = dropFins(idx);
+  const out = [];
+  for (let t = 0; t < kept.length; t += 3) out.push(kept[t], kept[t + 1], kept[t + 2], slotOf.get(`${kept[t]},${kept[t + 1]},${kept[t + 2]}`));
+  return out;
 }
 
 function faceAreas(verts, tris) {

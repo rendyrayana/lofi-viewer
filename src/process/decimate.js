@@ -54,7 +54,37 @@ export async function decimate(welded, targetTris) {
   if (out.length > targetIdx * 1.1) {
     [out] = MeshoptSimplifier.simplifySloppy(indices, positions, 3, null, targetIdx, 1.0);
   }
-  return compact(positions, dropDegenerate(out));
+  return compact(positions, dropFins(dropDegenerate(out)));
+}
+
+// Removes back-to-back triangle pairs (same three vertices, opposite winding).
+// Decimation creates these when a thin part such as a handle or strand
+// collapses; they are zero-thickness fins that make edges non-manifold.
+export function dropFins(idx) {
+  const seen = new Map();
+  for (let t = 0; t < idx.length; t += 3) {
+    const key = [idx[t], idx[t + 1], idx[t + 2]].sort((x, y) => x - y).join(',');
+    const list = seen.get(key);
+    if (list) list.push(t); else seen.set(key, [t]);
+  }
+  const drop = new Uint8Array(idx.length / 3);
+  for (const list of seen.values()) {
+    if (list.length < 2) continue;
+    const ccw = list.filter(t => signature(idx, t) > 0), cw = list.filter(t => signature(idx, t) < 0);
+    const pairs = Math.min(ccw.length, cw.length);
+    for (let i = 0; i < pairs; i++) { drop[ccw[i] / 3] = 1; drop[cw[i] / 3] = 1; }
+    // Exact duplicates with the same winding: keep one.
+    for (const group of [ccw.slice(pairs), cw.slice(pairs)]) group.slice(1).forEach(t => { drop[t / 3] = 1; });
+  }
+  const out = [];
+  for (let t = 0; t < idx.length; t += 3) if (!drop[t / 3]) out.push(idx[t], idx[t + 1], idx[t + 2]);
+  return new Uint32Array(out);
+}
+
+// Winding parity of a triangle relative to its sorted vertex order.
+function signature(idx, t) {
+  const a = idx[t], b = idx[t + 1], c = idx[t + 2];
+  return (a < b ? 1 : -1) * (b < c ? 1 : -1) * (a < c ? 1 : -1);
 }
 
 function compact(positions, indices) {

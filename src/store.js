@@ -77,7 +77,7 @@ const defaults = {
   videoRes: 'native',
   exportDuration: 4,
   printHeight: 60,
-  printFilaments: 4,
+  printFilaments: 8,
   printMinArea: 2,
   printSmooth: 1,
   printPreview: false,
