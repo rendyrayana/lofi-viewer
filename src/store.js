@@ -82,6 +82,7 @@ const defaults = {
   printFilaments: 8,
   printMinArea: 2,
   printSmooth: 1,
+  printContour: 3,
   printPreview: false,
   printPreviewInfo: '',
   printCloseHoles: true,

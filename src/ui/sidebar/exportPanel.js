@@ -121,10 +121,18 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
             </div>
           </div>
           <div class="panel-row">
-            <label for="sel-smooth">Smooth edges<small class="proc-hint">Straightens ragged color boundaries</small></label>
+            <label for="sel-smooth">Tidy boundaries<small class="proc-hint">Removes ragged single faces along color edges</small></label>
             <div class="row-right">
               <select id="sel-smooth">
                 ${[[0, 'Off'], [1, 'Light'], [2, 'Medium'], [4, 'Strong']].map(([n, l]) => `<option value="${n}" ${s.printSmooth === n ? 'selected' : ''}>${l}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="panel-row">
+            <label for="sel-contour">Smooth edges<small class="proc-hint">Cuts faces along curved color boundaries</small></label>
+            <div class="row-right">
+              <select id="sel-contour">
+                ${[[0, 'Off'], [2, 'Light'], [3, 'Medium'], [6, 'Strong']].map(([n, l]) => `<option value="${n}" ${s.printContour === n ? 'selected' : ''}>${l}</option>`).join('')}
               </select>
             </div>
           </div>
@@ -198,6 +206,7 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
   el.querySelector('#sel-filaments').addEventListener('change', e => store.set('printFilaments', parseInt(e.target.value, 10)));
   el.querySelector('#sel-colordetail').addEventListener('change', e => store.set('printColorDetail', parseInt(e.target.value, 10)));
   el.querySelector('#sel-minarea').addEventListener('change', e => store.set('printMinArea', parseFloat(e.target.value)));
+  el.querySelector('#sel-contour').addEventListener('change', e => store.set('printContour', parseInt(e.target.value, 10)));
   el.querySelector('#sel-smooth').addEventListener('change', e => store.set('printSmooth', parseInt(e.target.value, 10)));
   el.querySelector('#sw-mergeshades-print').addEventListener('change', e => store.set('procMergeShades', e.target.checked));
   el.querySelector('#sw-printpreview').addEventListener('change', e => store.set('printPreview', e.target.checked));

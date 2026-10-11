@@ -221,7 +221,9 @@ export function paintCode(state) {
 //                 ragged colour boundaries
 //   minAreaMm2  — colour patches smaller than this (printed area) take the
 //                 colour of the neighbour they share the most edges with
-export function prepareMesh(parts, { heightMm = 60, minAreaMm2 = 0, smooth = 0, closeHoles = true } = {}) {
+//   contour     — passes of colour-field smoothing; > 0 cuts faces along
+//                 smooth colour boundaries instead of following triangle edges
+export function prepareMesh(parts, { heightMm = 60, minAreaMm2 = 0, smooth = 0, closeHoles = true, contour = 0 } = {}) {
   const box = new THREE.Box3();
   const v = new THREE.Vector3();
   for (const p of parts) for (let i = 0; i < p.positions.length; i += 3) box.expandByPoint(v.fromArray(p.positions, i));
@@ -232,27 +234,31 @@ export function prepareMesh(parts, { heightMm = 60, minAreaMm2 = 0, smooth = 0, 
   const check = { openEdges: 0, nonManifoldEdges: 0, islandsMerged: 0, facesRecolored: 0, facesSmoothed: 0, holesClosed: 0 };
   const meshes = parts.map(p => {
     const welded = weld(p.positions, p.slot);
-    const verts = welded.verts;
-    const tris = removeFins(welded.tris);
+    let verts = welded.verts;
+    let tris = removeFins(welded.tris);
     if (closeHoles) check.holesClosed += fillHoles(verts, tris);
+    let edges = edgeFaces(tris);
+    const nb = neighbours(tris, edges);
+    if (smooth > 0) check.facesSmoothed += smoothSlots(tris, nb, smooth);
+    if (minAreaMm2 > 0) {
+      const r = mergeIslands(tris, nb, faceAreas(verts, tris), minAreaMm2 / (k * k));
+      check.islandsMerged += r.islands;
+      check.facesRecolored += r.faces;
+    }
+    if (contour > 0) {
+      ({ verts, tris } = contourSlots(verts, tris, contour));
+      edges = edgeFaces(tris);
+    }
+    for (const faces of edges.values()) {
+      if (faces.length === 1) check.openEdges++;
+      else if (faces.length > 2) check.nonManifoldEdges++;
+    }
     const world = Float64Array.from(verts);
     const out = new Float64Array(verts.length);
     for (let i = 0; i < verts.length; i += 3) {
       out[i] = (verts[i] - center.x) * k;
       out[i + 1] = -(verts[i + 2] - center.z) * k;
       out[i + 2] = (verts[i + 1] - box.min.y) * k;
-    }
-    const edges = edgeFaces(tris);
-    for (const faces of edges.values()) {
-      if (faces.length === 1) check.openEdges++;
-      else if (faces.length > 2) check.nonManifoldEdges++;
-    }
-    const nb = neighbours(tris, edges);
-    if (smooth > 0) check.facesSmoothed += smoothSlots(tris, nb, smooth);
-    if (minAreaMm2 > 0) {
-      const r = mergeIslands(tris, nb, faceAreas(out, tris), minAreaMm2);
-      check.islandsMerged += r.islands;
-      check.facesRecolored += r.faces;
     }
     return { name: p.name, verts: out, world, tris };
   });
@@ -324,6 +330,96 @@ function smoothSlots(tris, nb, passes) {
   return changed.size;
 }
 
+// Replaces stair-stepped colour boundaries with smooth cuts. Face colours are
+// spread into a per-vertex colour field (area-weighted, then smoothed over
+// vertex neighbours); faces whose corners fall in different colours are split
+// where the field crosses over. A crossing point depends only on its edge's
+// two vertices, so neighbouring faces share it and the mesh stays closed.
+function contourSlots(verts, tris, passes) {
+  const nV = verts.length / 3, nF = tris.length / 4;
+  let nS = 0;
+  for (let f = 0; f < nF; f++) nS = Math.max(nS, tris[f * 4 + 3] + 1);
+  if (nS < 2) return { verts, tris };
+
+  const area = faceAreas(verts, tris);
+  let w = new Float32Array(nV * nS);
+  const adj = Array.from({ length: nV }, () => new Set());
+  for (let f = 0; f < nF; f++) {
+    const s = tris[f * 4 + 3];
+    for (let c = 0; c < 3; c++) {
+      const v = tris[f * 4 + c];
+      w[v * nS + s] += area[f];
+      adj[v].add(tris[f * 4 + (c + 1) % 3]); adj[v].add(tris[f * 4 + (c + 2) % 3]);
+    }
+  }
+  for (let v = 0; v < nV; v++) {
+    let sum = 0;
+    for (let s = 0; s < nS; s++) sum += w[v * nS + s];
+    if (sum > 0) for (let s = 0; s < nS; s++) w[v * nS + s] /= sum;
+  }
+  const nbr = adj.map(a => Uint32Array.from(a));
+  for (let p = 0; p < passes; p++) {
+    const next = new Float32Array(w.length);
+    for (let v = 0; v < nV; v++) {
+      const ns = nbr[v];
+      for (let s = 0; s < nS; s++) {
+        let acc = 0;
+        for (let j = 0; j < ns.length; j++) acc += w[ns[j] * nS + s];
+        next[v * nS + s] = ns.length ? 0.5 * w[v * nS + s] + 0.5 * acc / ns.length : w[v * nS + s];
+      }
+    }
+    w = next;
+  }
+  const label = new Uint8Array(nV);
+  for (let v = 0; v < nV; v++) {
+    let b = 0;
+    for (let s = 1; s < nS; s++) if (w[v * nS + s] > w[v * nS + b]) b = s;
+    label[v] = b;
+  }
+
+  const out = Array.from(verts);
+  const addVert = (x, y, z) => { out.push(x, y, z); return out.length / 3 - 1; };
+  const cuts = new Map();
+  // Point on edge i–j where colours label[i] and label[j] are equally strong.
+  const cut = (i, j) => {
+    const key = i < j ? i * nV + j : j * nV + i;
+    let id = cuts.get(key);
+    if (id !== undefined) return id;
+    const a = label[i], b = label[j];
+    const di = w[i * nS + a] - w[i * nS + b], dj = w[j * nS + a] - w[j * nS + b];
+    let t = di - dj > 1e-9 ? di / (di - dj) : 0.5;
+    t = Math.min(0.95, Math.max(0.05, t));
+    id = addVert(
+      verts[i * 3] + (verts[j * 3] - verts[i * 3]) * t,
+      verts[i * 3 + 1] + (verts[j * 3 + 1] - verts[i * 3 + 1]) * t,
+      verts[i * 3 + 2] + (verts[j * 3 + 2] - verts[i * 3 + 2]) * t);
+    cuts.set(key, id);
+    return id;
+  };
+
+  const res = [];
+  for (let f = 0; f < nF; f++) {
+    let v0 = tris[f * 4], v1 = tris[f * 4 + 1], v2 = tris[f * 4 + 2];
+    let l0 = label[v0], l1 = label[v1], l2 = label[v2];
+    if (l0 === l1 && l1 === l2) { res.push(v0, v1, v2, l0); continue; }
+    if (l0 !== l1 && l1 !== l2 && l0 !== l2) {
+      const c = addVert(
+        (verts[v0 * 3] + verts[v1 * 3] + verts[v2 * 3]) / 3,
+        (verts[v0 * 3 + 1] + verts[v1 * 3 + 1] + verts[v2 * 3 + 1]) / 3,
+        (verts[v0 * 3 + 2] + verts[v1 * 3 + 2] + verts[v2 * 3 + 2]) / 3);
+      const p01 = cut(v0, v1), p12 = cut(v1, v2), p20 = cut(v2, v0);
+      res.push(v0, p01, c, l0, v0, c, p20, l0, v1, p12, c, l1, v1, c, p01, l1, v2, p20, c, l2, v2, c, p12, l2);
+      continue;
+    }
+    // Rotate so v2 is the odd corner out.
+    if (l1 === l2) [v0, v1, v2, l0, l1, l2] = [v1, v2, v0, l1, l2, l0];
+    else if (l0 === l2) [v0, v1, v2, l0, l1, l2] = [v2, v0, v1, l2, l0, l1];
+    const p = cut(v0, v2), q = cut(v1, v2);
+    res.push(v0, v1, q, l0, v0, q, p, l0, p, q, v2, l2);
+  }
+  return { verts: out, tris: res };
+}
+
 // Single-file 3MF with per-triangle filament paint (Bambu paint_color,
 // PrusaSlicer mmu_segmentation) and standard basematerials colours.
 export function build3mf(prepared, slots, { name = 'lofi-viewer' } = {}) {
@@ -393,7 +489,7 @@ export function buildObjMtl(prepared, slots, { name = 'lofi-viewer' } = {}) {
     }
     for (const [slot, faces] of [...bySlot].sort((a, b) => a[0] - b[0])) {
       lines.push(`usemtl filament_${slot + 1}`);
-      lines.push(...faces);
+      for (const f of faces) lines.push(f);
     }
     offset += m.verts.length / 3;
   }

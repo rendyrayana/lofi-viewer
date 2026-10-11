@@ -685,7 +685,7 @@ async function buildPrintModel() {
     mergeShades: s.procMergeShades,
   });
   const prepared = prepareMesh(parts, {
-    heightMm: s.printHeight, minAreaMm2: s.printMinArea, smooth: s.printSmooth, closeHoles: s.printCloseHoles,
+    heightMm: s.printHeight, minAreaMm2: s.printMinArea, smooth: s.printSmooth, contour: s.printContour, closeHoles: s.printCloseHoles,
   });
   return { prepared, slots };
 }
@@ -888,7 +888,7 @@ async function refreshPreview() {
   }
 }
 
-['printPreview', 'printColorDetail', 'printSmooth', 'printMinArea', 'printCloseHoles', 'printFilaments', 'procMergeShades', 'procStats']
+['printPreview', 'printColorDetail', 'printSmooth', 'printContour', 'printMinArea', 'printCloseHoles', 'printFilaments', 'procMergeShades', 'procStats']
   .forEach(k => store.subscribe(k, schedulePreview));
 
 function buildProcessedGlb() {
