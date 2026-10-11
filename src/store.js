@@ -23,6 +23,7 @@ const defaults = {
   procPalette: 'off',
   procPreset: 'bambuBasic',
   procColors: 8,
+  procMergeShades: false,
   procCustom: ['#000000', '#ffffff', '#c12e1f', '#0a2989'],
   procDither: true,
   procDitherPattern: 'psx4',
@@ -88,7 +89,7 @@ const defaults = {
 export { defaults };
 
 export const PANEL_KEYS = {
-  process: ['procDecimate','procTargetTris','procFlat','procTexSize','procTexFilter','procTexMode','procTexDensity','procSaturation','procContrast','procPalette','procPreset','procColors','procCustom','procDither','procDitherPattern','procDitherStrength'],
+  process: ['procDecimate','procTargetTris','procFlat','procTexSize','procTexFilter','procTexMode','procTexDensity','procSaturation','procContrast','procPalette','procPreset','procColors','procMergeShades','procCustom','procDither','procDitherPattern','procDitherStrength'],
   render: ['renderScale','vertexSnap','snapPrecision','colorDepth','ditherPattern','affineWarp','textureFilter','wireframe','backfaceCulling','showGrid'],
   environment: ['bgType','bgColor','bgGradientColor','ambientIntensity','keyLightIntensity','lightColor','exposure','fogDensity','fogColor'],
   effects: ['crtCurvature','scanlines','scanlineOpacity','vignette','chromaticAberration','filmGrain','colorGrade','bloom','bloomIntensity'],

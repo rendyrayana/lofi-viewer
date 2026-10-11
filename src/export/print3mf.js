@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { zipSync, strToU8 } from 'fflate';
-import { extractPalette, hexToRgb } from '../process/palette.js';
+import { extractPalette, hexToRgb, makeColorMatcher } from '../process/palette.js';
 import { makeProjector } from '../process/bake.js';
 
 const MAX_PALETTE_FILAMENTS = 16;
@@ -20,7 +20,7 @@ const SAMPLES = [
 // adaptive off every face is split to maxLevel. Returns world-space parts
 // with one filament slot per face, plus the filament colours used.
 export function collectFaces(processor, {
-  maxLevel = 3, adaptive = true, palette = null, maxFilaments = 4, saturation = 1, contrast = 1,
+  maxLevel = 3, adaptive = true, palette = null, maxFilaments = 4, saturation = 1, contrast = 1, mergeShades = false,
 } = {}) {
   const sources = processor.entries.map(e => faceColorSource(e, saturation, contrast));
 
@@ -36,9 +36,9 @@ export function collectFaces(processor, {
         for (const b of SAMPLES) { src.color(t, b[0], b[1], b[2], rgb); samples.push(rgb[0], rgb[1], rgb[2], 255); }
       }
     });
-    pal = extractPalette({ data: samples }, maxFilaments);
+    pal = extractPalette({ data: samples }, maxFilaments, { mergeShades });
   }
-  const nearest = makeNearest(pal);
+  const nearest = makeColorMatcher(pal, mergeShades);
 
   const parts = [];
   const used = new Uint8Array(pal.length);
@@ -206,28 +206,6 @@ function faceColorSource(e, saturation, contrast) {
 }
 
 const clampByte = v => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
-
-// Nearest palette entry through a lazily filled 15-bit lookup table.
-function makeNearest(palHex) {
-  const pal = palHex.map(hexToRgb);
-  const lut = new Int16Array(32768).fill(-1);
-  return (r, g, b) => {
-    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-    let best = lut[key];
-    if (best < 0) {
-      const cr = (r & 0xf8) + 4, cg = (g & 0xf8) + 4, cb = (b & 0xf8) + 4;
-      let bd = Infinity;
-      best = 0;
-      pal.forEach((q, k) => {
-        const rm = (cr + q[0]) / 2;
-        const d = (2 + rm / 256) * (cr - q[0]) ** 2 + 4 * (cg - q[1]) ** 2 + (2 + (255 - rm) / 256) * (cb - q[2]) ** 2;
-        if (d < bd) { bd = d; best = k; }
-      });
-      lut[key] = best;
-    }
-    return best;
-  };
-}
 
 // Encodes a whole-triangle filament state the way PrusaSlicer/Bambu Studio
 // serialise TriangleSelector leaves: states 1–2 as one nibble (state << 2),

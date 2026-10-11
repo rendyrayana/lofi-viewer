@@ -791,3 +791,19 @@ input[type="number"]:focus { outline: 1px solid var(--c-text-dim); }
 .sp-name { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c-text-faint); }
 .sp-val { font-family: 'Space Mono', monospace; font-size: 11px; }
 .status-pop .is-skipped .sp-val { color: var(--c-text-faint); }
+
+/* ── Drop hint (viewport: fixed dark styling, never inverted) ────────────── */
+#drop-hint {
+  position: absolute; left: 50%; top: 18%; transform: translateX(-50%);
+  text-align: center; pointer-events: none; z-index: 3;
+  background: rgba(20, 20, 20, 0.78); color: #e6e6e4;
+  padding: 10px 16px; border-radius: 8px;
+}
+#drop-hint .dh-title { margin: 0; font-size: 13px; font-weight: 600; }
+#drop-hint .dh-sub { margin: 3px 0 0; font-family: 'Space Mono', monospace; font-size: 10px; color: rgba(230, 230, 228, 0.7); }
+#viewport.is-dragover { outline: 2px dashed #e6e6e4; outline-offset: -6px; }
+[data-viewer] #drop-hint { display: none; }
+.fold-inner { margin-top: 12px; }
+.fold-inner .fold-body { padding-bottom: 4px; }
+.icon-btn:disabled { opacity: 0.3; cursor: default; }
+.icon-btn:disabled:hover { background: transparent; }

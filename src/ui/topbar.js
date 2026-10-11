@@ -17,6 +17,16 @@ export function buildTopbar(el) {
     <div class="status-wrap" id="status-wrap"></div>
     <span id="filename-badge"></span>
     <div class="topbar-actions">
+      <button class="icon-btn" id="btn-undo" aria-label="Undo" title="Undo (⌘Z)" disabled>
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5.5 3.5 2.5 6.5l3 3"/><path d="M2.5 6.5h7a4 4 0 0 1 0 8H7"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-redo" aria-label="Redo" title="Redo (⇧⌘Z)" disabled>
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.5 3.5l3 3-3 3"/><path d="M13.5 6.5h-7a4 4 0 0 0 0 8H9"/>
+        </svg>
+      </button>
       <button class="icon-btn" id="btn-invert" aria-label="Toggle light/dark" aria-pressed="false" title="Toggle light/dark">
         <svg id="invert-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="8" cy="8" r="3"/>

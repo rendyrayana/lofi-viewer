@@ -3,6 +3,8 @@ import { takeSnapshot } from '../../export/snapshot.js';
 import { recordTurntable, recordTurntableLoop } from '../../export/record.js';
 import { shareLink } from '../../export/preset.js';
 
+let printAdvancedOpen = false;
+
 export function buildExportPanel(el, getRenderer, getPipeline = null, getControls = null, onEnterViewer = null, onSaveHtml = null, { onExportPrint = null, onExportGlb = null } = {}) {
   const s = store.state;
 
@@ -84,12 +86,27 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
             </div>
           </div>
           <div class="proc-status" id="preview-info" aria-live="polite">${s.printPreviewInfo || ''}</div>
+          <button class="btn btn-primary" id="btn-obj-print">Export for Bambu Studio (OBJ + MTL)</button>
+          <button class="btn btn-ghost" id="btn-3mf">Export 3MF (Orca / PrusaSlicer)</button>
+          <div class="proc-status" id="print-status" aria-live="polite"></div>
+          <details class="fold fold-inner" id="print-advanced" ${printAdvancedOpen ? 'open' : ''}>
+            <summary><span class="fold-title">Advanced</span><span class="fold-hint">Color detail, smoothing, specks, holes</span></summary>
+            <div class="fold-body">
           <div class="panel-row">
             <label for="sel-colordetail">Color detail<small class="proc-hint">Faces split only along color edges, read from the original scan</small></label>
             <div class="row-right">
               <select id="sel-colordetail">
                 ${[[0, '1 color per face'], [2, 'Adaptive · up to 16×'], [3, 'Adaptive · up to 64×'], [4, 'Adaptive · up to 256×']].map(([n, l]) => `<option value="${n}" ${s.printColorDetail === n ? 'selected' : ''}>${l}</option>`).join('')}
               </select>
+            </div>
+          </div>
+          <div class="panel-row">
+            <label for="sw-mergeshades-print">Merge shades<small class="proc-hint">When filament colors are picked from the scan</small></label>
+            <div class="row-right">
+              <label class="switch-wrap" for="sw-mergeshades-print" aria-label="Merge shades">
+                <input type="checkbox" id="sw-mergeshades-print" role="switch" ${s.procMergeShades ? 'checked' : ''} />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
             </div>
           </div>
           <div class="panel-row">
@@ -117,9 +134,8 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
               </label>
             </div>
           </div>
-          <button class="btn btn-primary" id="btn-obj-print">Export for Bambu Studio (OBJ + MTL)</button>
-          <button class="btn btn-ghost" id="btn-3mf">Export 3MF (Orca / PrusaSlicer)</button>
-          <div class="proc-status" id="print-status" aria-live="polite"></div>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -179,8 +195,13 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
   el.querySelector('#sel-colordetail').addEventListener('change', e => store.set('printColorDetail', parseInt(e.target.value, 10)));
   el.querySelector('#sel-minarea').addEventListener('change', e => store.set('printMinArea', parseFloat(e.target.value)));
   el.querySelector('#sel-smooth').addEventListener('change', e => store.set('printSmooth', parseInt(e.target.value, 10)));
+  el.querySelector('#sw-mergeshades-print').addEventListener('change', e => store.set('procMergeShades', e.target.checked));
   el.querySelector('#sw-printpreview').addEventListener('change', e => store.set('printPreview', e.target.checked));
-  const unsubPreview = store.subscribe('printPreviewInfo', v => { el.querySelector('#preview-info').textContent = v || ''; });
+  el.querySelector('#print-advanced').addEventListener('toggle', e => { printAdvancedOpen = e.target.open; });
+  const unsubs = [
+    store.subscribe('printPreviewInfo', v => { el.querySelector('#preview-info').textContent = v || ''; }),
+    store.subscribe('printPreview', v => { el.querySelector('#sw-printpreview').checked = v; }),
+  ];
   el.querySelector('#sw-closeholes').addEventListener('change', e => store.set('printCloseHoles', e.target.checked));
   const runPrintExport = async (format, btn) => {
     const status = el.querySelector('#print-status');
@@ -203,5 +224,5 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
   el.querySelector('#btn-viewer').addEventListener('click', () => onEnterViewer?.());
   el.querySelector('#btn-share').addEventListener('click', () => shareLink());
 
-  return () => unsubPreview();
+  return () => unsubs.forEach(u => u());
 }

@@ -174,7 +174,7 @@ export class ModelProcessor {
       if (e.image && opts.palette !== 'off') {
         const q = await time('quantize', () => (opts.palette === '15bit'
           ? quantize15(e.image, opts.ditherPattern, opts.ditherStrength, opts.dither)
-          : quantizeToPalette(e.image, this.palette, opts.ditherPattern, opts.ditherStrength, opts.dither)));
+          : quantizeToPalette(e.image, this.palette, opts.ditherPattern, opts.ditherStrength, opts.dither, opts.mergeShades)));
         e.image = { ...q, flipY: e.image.flipY };
       }
       await time('upload', () => this._apply(e, opts));
@@ -257,7 +257,7 @@ function resolvePalette(opts, images) {
   if (opts.palette === 'extract' && images.length) {
     // Pool pixels from all meshes so multi-part models share one palette.
     const data = images.length === 1 ? images[0].data : concat(images.map(i => i.data));
-    return extractPalette({ data }, opts.colors);
+    return extractPalette({ data }, opts.colors, { mergeShades: opts.mergeShades });
   }
   return [];
 }

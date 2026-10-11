@@ -116,13 +116,64 @@ export function snap15(hexColors) {
   return [...new Set(hexColors.map(h => rgbToHex(hexToRgb(h).map(v => Math.round(Math.round(v * 31 / 255) * 255 / 31)))))];
 }
 
+// Colour features for clustering and matching. With mergeShades, colours are
+// compared in CIELAB with lightness heavily down-weighted, so lit and shadowed
+// areas of one material (baked into scan textures) count as one colour.
+const SHADE_WEIGHT = 0.3;
+const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+const labF = t => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+function feature(r, g, b, mergeShades) {
+  if (!mergeShades) return [r, g, b];
+  const R = lin(r), G = lin(g), B = lin(b);
+  const x = labF((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047);
+  const y = labF(0.2126 * R + 0.7152 * G + 0.0722 * B);
+  const z = labF((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883);
+  return [(116 * y - 16) * SHADE_WEIGHT, 500 * (x - y), 200 * (y - z)];
+}
+
+// Nearest palette entry for any RGB, via a lazily filled 15-bit lookup table.
+export function makeColorMatcher(hexColors, mergeShades = false) {
+  const pal = hexColors.map(hexToRgb);
+  const feats = pal.map(([r, g, b]) => feature(r, g, b, mergeShades));
+  const lut = new Int16Array(32768).fill(-1);
+  return (r, g, b) => {
+    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    let best = lut[key];
+    if (best < 0) {
+      const cr = (r & 0xf8) + 4, cg = (g & 0xf8) + 4, cb = (b & 0xf8) + 4;
+      let bd = Infinity;
+      best = 0;
+      if (mergeShades) {
+        const f = feature(cr, cg, cb, true);
+        for (let k = 0; k < feats.length; k++) {
+          const d = (f[0] - feats[k][0]) ** 2 + (f[1] - feats[k][1]) ** 2 + (f[2] - feats[k][2]) ** 2;
+          if (d < bd) { bd = d; best = k; }
+        }
+      } else {
+        for (let k = 0; k < pal.length; k++) {
+          const d = redmean(cr, cg, cb, pal[k]);
+          if (d < bd) { bd = d; best = k; }
+        }
+      }
+      lut[key] = best;
+    }
+    return best;
+  };
+}
+
 // Palette extraction: range-midpoint box splitting (keeps small but distinct
 // colours such as dark eyes, which median cut averages away), then k-means.
-export function extractPalette(img, count) {
+// Clustering runs on colour features; each palette entry is its cluster's
+// mean RGB.
+export function extractPalette(img, count, { mergeShades = false } = {}) {
   const { data } = img;
   const step = Math.max(1, Math.floor(data.length / 4 / 40000));
   const pts = [];
-  for (let i = 0; i < data.length; i += 4 * step) if (data[i + 3] >= 128) pts.push([data[i], data[i + 1], data[i + 2]]);
+  for (let i = 0; i < data.length; i += 4 * step) {
+    if (data[i + 3] < 128) continue;
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    pts.push({ f: feature(r, g, b, mergeShades), c: [r, g, b] });
+  }
   if (!pts.length) return ['#000000'];
 
   const boxes = [pts];
@@ -130,37 +181,44 @@ export function extractPalette(img, count) {
     let bi = -1, bestRange = 0, bestCh = 0, bestMid = 0;
     boxes.forEach((box, i) => {
       for (let ch = 0; ch < 3; ch++) {
-        let lo = 255, hi = 0;
-        for (const p of box) { if (p[ch] < lo) lo = p[ch]; if (p[ch] > hi) hi = p[ch]; }
+        let lo = Infinity, hi = -Infinity;
+        for (const p of box) { if (p.f[ch] < lo) lo = p.f[ch]; if (p.f[ch] > hi) hi = p.f[ch]; }
         if (hi - lo > bestRange) { bestRange = hi - lo; bi = i; bestCh = ch; bestMid = (lo + hi) / 2; }
       }
     });
-    if (bi < 0) break;
+    if (bi < 0 || bestRange < 1e-6) break;
     const a = [], b = [];
-    for (const p of boxes[bi]) (p[bestCh] <= bestMid ? a : b).push(p);
+    for (const p of boxes[bi]) (p.f[bestCh] <= bestMid ? a : b).push(p);
+    if (!a.length || !b.length) break;
     boxes.splice(bi, 1, a, b);
   }
 
-  let centers = boxes.map(box => {
+  const mean = (list, key) => {
     const s = [0, 0, 0];
-    for (const p of box) { s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; }
-    return s.map(v => v / box.length);
-  });
-
+    for (const p of list) { s[0] += p[key][0]; s[1] += p[key][1]; s[2] += p[key][2]; }
+    return s.map(v => v / list.length);
+  };
+  let centers = boxes.map(box => mean(box, 'f'));
+  let members = boxes;
   for (let it = 0; it < 6; it++) {
-    const sum = centers.map(() => [0, 0, 0, 0]);
+    const groups = centers.map(() => []);
     for (const p of pts) {
       let best = 0, bd = Infinity;
       for (let k = 0; k < centers.length; k++) {
-        const d = redmean(p[0], p[1], p[2], centers[k]);
+        const c = centers[k];
+        const d = mergeShades
+          ? (p.f[0] - c[0]) ** 2 + (p.f[1] - c[1]) ** 2 + (p.f[2] - c[2]) ** 2
+          : redmean(p.f[0], p.f[1], p.f[2], c);
         if (d < bd) { bd = d; best = k; }
       }
-      const s = sum[best]; s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; s[3]++;
+      groups[best].push(p);
     }
-    centers = centers.map((c, k) => (sum[k][3] ? [sum[k][0] / sum[k][3], sum[k][1] / sum[k][3], sum[k][2] / sum[k][3]] : c));
+    members = groups.map((g, k) => (g.length ? g : members[k] || []));
+    centers = members.map((g, k) => (g.length ? mean(g, 'f') : centers[k]));
   }
 
-  return [...new Set(centers.map(rgbToHex))].sort((x, y) => luminance(hexToRgb(x)) - luminance(hexToRgb(y)));
+  const colors = members.filter(g => g.length).map(g => rgbToHex(mean(g, 'c')));
+  return [...new Set(colors)].sort((x, y) => luminance(hexToRgb(x)) - luminance(hexToRgb(y)));
 }
 
 function luminance([r, g, b]) { return 0.299 * r + 0.587 * g + 0.114 * b; }
@@ -228,29 +286,12 @@ function diffuse(buf, W, H, x, y, c, err) {
 // Maps every pixel to its nearest palette colour (redmean distance), with
 // optional ordered dither (offset scaled to the palette's typical colour
 // spacing) or Floyd–Steinberg error diffusion.
-export function quantizeToPalette(img, hexColors, pattern = 'psx4', strength = 1, dither = true) {
+export function quantizeToPalette(img, hexColors, pattern = 'psx4', strength = 1, dither = true, mergeShades = false) {
   const pal = hexColors.map(hexToRgb);
   const { data, width: W, height: H } = img;
   const out = new Uint8ClampedArray(data.length);
   const spread = 255 / Math.max(2, Math.cbrt(pal.length) * 2);
-  // Nearest-colour lookup at 15-bit precision (32,768 cells), filled lazily,
-  // so large textures cost one table read per pixel instead of a palette scan.
-  const lut = new Int16Array(32768).fill(-1);
-  const nearest = (r, g, b) => {
-    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-    let best = lut[key];
-    if (best < 0) {
-      const cr = (r & 0xf8) + 4, cg = (g & 0xf8) + 4, cb = (b & 0xf8) + 4;
-      let bestD = Infinity;
-      best = 0;
-      for (let k = 0; k < pal.length; k++) {
-        const dist = redmean(cr, cg, cb, pal[k]);
-        if (dist < bestD) { bestD = dist; best = k; }
-      }
-      lut[key] = best;
-    }
-    return best;
-  };
+  const nearest = makeColorMatcher(hexColors, mergeShades);
 
   if (dither && pattern === 'fs') {
     const buf = Float32Array.from(data);

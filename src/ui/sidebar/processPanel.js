@@ -191,6 +191,11 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
                 <span class="row-value" id="lbl-colors">${s.procColors}</span>
               </div>
             </div>` : ''}
+            ${s.procPalette === 'extract' ? `
+            <div class="panel-row">
+              <label for="sw-mergeshades">Merge shades<small class="proc-hint">Lit and shadowed parts of one color become one entry</small></label>
+              <div class="row-right">${mkSwitch('sw-mergeshades', s.procMergeShades, 'Merge shades')}</div>
+            </div>` : ''}
             <div class="swatches" id="swatches" aria-label="Palette colors"></div>
             ${['preset', 'extract', 'clut4'].includes(s.procPalette) ? `
             <button class="btn btn-ghost btn-small" id="btn-tocustom">Edit these colors</button>` : ''}
@@ -332,6 +337,7 @@ export function buildProcessPanel(el, { onRerunFresh, onCopyMetrics, getPreview 
       if (pal?.length) store.setMany({ procCustom: pal.slice(0, MAX_CUSTOM), procPaletteLast: 'custom', procPalette: 'custom' });
     });
     $('#sw-procdither').addEventListener('change', e => store.set('procDither', e.target.checked));
+    $('#sw-mergeshades')?.addEventListener('change', e => store.set('procMergeShades', e.target.checked));
     $('#seg-ditherpattern')?.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => store.set('procDitherPattern', btn.dataset.val)));
     const slStr = $('#sl-ditherstr');
     if (slStr) {

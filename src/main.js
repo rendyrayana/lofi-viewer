@@ -12,6 +12,7 @@ import { buildLookPanel } from './ui/sidebar/lookPanel.js';
 import { ModelProcessor } from './process/processor.js';
 import { buildExportPanel } from './ui/sidebar/exportPanel.js';
 import { buildStatusIndicator } from './ui/statusIndicator.js';
+import { undo, redo, onHistoryChange, setHistoryApplyHandler } from './history.js';
 import { loadPresetFromURL, getPresetData } from './export/preset.js';
 import { saveViewerHtml } from './export/saveHtml.js';
 import { collectFaces, prepareMesh, build3mf, buildObjMtl, downloadFile } from './export/print3mf.js';
@@ -108,6 +109,27 @@ function showPanel(tab) {
 if (!['import', 'process', 'look', 'export'].includes(store.get('activeTab'))) store.set('activeTab', 'import');
 buildTabs(document.getElementById('tab-strip'));
 buildStatusIndicator(document.getElementById('status-wrap'));
+
+// ── Undo / redo ───────────────────────────────────────────────────────────────
+const btnUndo = document.getElementById('btn-undo'), btnRedo = document.getElementById('btn-redo');
+btnUndo.addEventListener('click', undo);
+btnRedo.addEventListener('click', redo);
+onHistoryChange(({ canUndo, canRedo }) => { btnUndo.disabled = !canUndo; btnRedo.disabled = !canRedo; });
+setHistoryApplyHandler(changes => {
+  if ('projection' in changes) { sc.setCamera(store.get('projection')); pipeline.camera = sc.camera; }
+  // Panels read the store when built, so rebuild the open one.
+  const scroll = panelContent.scrollTop;
+  showPanel(store.get('activeTab'));
+  panelContent.scrollTop = scroll;
+});
+window.addEventListener('keydown', e => {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+  // Leave text editing undo to the field itself.
+  if (e.target.closest?.('input[type="text"], input[type="number"], textarea, [contenteditable="true"]')) return;
+  const key = e.key.toLowerCase();
+  if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); redo(); }
+});
 store.subscribe('activeTab', tab => { panelContent.scrollTop = 0; showPanel(tab); });
 showPanel(store.get('activeTab'));
 
@@ -125,13 +147,18 @@ toolbar.innerHTML = `
       <path d="M7 1v12M1 7h12M4 4l3-3 3 3M4 10l3 3 3-3M4 4 1 7l3 3M10 4l3 3-3 3"/>
     </svg>
   </button>
-  <button class="tb-btn" id="tb-frame" aria-label="Frame model" title="Frame">
+  <button class="tb-btn" id="tb-frame" aria-label="Frame model" title="Frame (F)">
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
       <rect x="1" y="1" width="4" height="4" rx="0.5"/><rect x="9" y="1" width="4" height="4" rx="0.5"/>
       <rect x="1" y="9" width="4" height="4" rx="0.5"/><rect x="9" y="9" width="4" height="4" rx="0.5"/>
     </svg>
   </button>
-  <button class="tb-btn" id="tb-compare" aria-label="Compare with original scan" aria-pressed="false" title="Compare with original">
+  <button class="tb-btn" id="tb-printview" aria-label="Preview print colors" aria-pressed="false" title="Print colors (P)">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M3 5V1.5h8V5"/><rect x="1" y="5" width="12" height="5" rx="1"/><path d="M3.5 8.5h7V13h-7z"/>
+    </svg>
+  </button>
+  <button class="tb-btn" id="tb-compare" aria-label="Compare with original scan" aria-pressed="false" title="Compare with original (C)">
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
       <rect x="1" y="2" width="12" height="10" rx="1"/><path d="M7 0.5v13"/>
     </svg>
@@ -149,7 +176,7 @@ toolbar.innerHTML = `
     <button data-val="orthographic">Ortho</button>
   </div>
   <div class="tb-divider"></div>
-  <button class="tb-btn" id="tb-viewer" aria-label="Viewer mode" aria-pressed="false" title="Viewer mode — hide the editor">
+  <button class="tb-btn" id="tb-viewer" aria-label="Viewer mode" aria-pressed="false" title="Viewer mode (V)">
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z"/><circle cx="8" cy="8" r="2"/>
     </svg>
@@ -186,6 +213,31 @@ toolbar.querySelector('#tb-frame').addEventListener('click', () => {
   const target = loadedModel || defaultCube;
   if (target) sc.frameObject(target);
 });
+const tbPrint = toolbar.querySelector('#tb-printview');
+tbPrint.addEventListener('click', () => store.set('printPreview', !store.get('printPreview')));
+store.subscribe('printPreview', on => {
+  tbPrint.classList.toggle('active', on);
+  tbPrint.setAttribute('aria-pressed', String(on));
+});
+
+// Shortcuts: F frame · C compare · V viewer mode · P print preview.
+// Ignored while typing in a field or with a modifier held.
+window.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  if (t.closest?.('input, select, textarea, [contenteditable="true"]')) return;
+  const key = e.key.toLowerCase();
+  const action = {
+    f: () => toolbar.querySelector('#tb-frame').click(),
+    c: () => tbCompare.click(),
+    v: () => tbViewer.click(),
+    p: () => tbPrint.click(),
+  }[key];
+  if (!action) return;
+  e.preventDefault();
+  action();
+});
+
 const tbCompare = toolbar.querySelector('#tb-compare');
 tbCompare.addEventListener('click', () => store.set('compare', !store.get('compare')));
 
@@ -313,7 +365,7 @@ function syncViewerButton() {
   const on = document.documentElement.hasAttribute('data-viewer');
   tbViewer.classList.toggle('active', on);
   tbViewer.setAttribute('aria-pressed', String(on));
-  tbViewer.title = on ? 'Back to the editor' : 'Viewer mode — hide the editor';
+  tbViewer.title = on ? 'Back to the editor (V)' : 'Viewer mode (V)';
 }
 new MutationObserver(syncViewerButton).observe(document.documentElement, { attributes: true, attributeFilter: ['data-viewer'] });
 syncViewerButton();
@@ -447,6 +499,7 @@ async function runProcess() {
       palette: s.procPalette,
       preset: s.procPreset,
       colors: s.procColors,
+      mergeShades: s.procMergeShades,
       custom: s.procCustom,
       dither: s.procDither,
       ditherPattern: s.procDitherPattern,
@@ -532,6 +585,7 @@ async function buildPrintModel() {
     maxFilaments: s.printFilaments,
     saturation: palOn ? s.procSaturation : 1,
     contrast: palOn ? s.procContrast : 1,
+    mergeShades: s.procMergeShades,
   });
   const prepared = prepareMesh(parts, {
     heightMm: s.printHeight, minAreaMm2: s.printMinArea, smooth: s.printSmooth, closeHoles: s.printCloseHoles,
@@ -620,7 +674,7 @@ async function refreshPreview() {
   }
 }
 
-['printPreview', 'printColorDetail', 'printSmooth', 'printMinArea', 'printCloseHoles', 'printFilaments', 'procStats']
+['printPreview', 'printColorDetail', 'printSmooth', 'printMinArea', 'printCloseHoles', 'printFilaments', 'procMergeShades', 'procStats']
   .forEach(k => store.subscribe(k, schedulePreview));
 
 function buildProcessedGlb() {
@@ -835,12 +889,30 @@ ro.observe(canvas); // catch aspect-ratio CSS constraint changes
 
 // ── Drag & drop model ─────────────────────────────────────────────────────────
 const viewport = document.getElementById('viewport');
-viewport.addEventListener('dragover', e => e.preventDefault());
-viewport.addEventListener('drop', e => {
+const MODEL_EXT = /\.(glb|gltf|obj|fbx)$/i, IMAGE_EXT = /\.(png|jpe?g|webp|bmp)$/i;
+viewport.addEventListener('dragover', e => { e.preventDefault(); viewport.classList.add('is-dragover'); });
+viewport.addEventListener('dragleave', e => { if (!viewport.contains(e.relatedTarget)) viewport.classList.remove('is-dragover'); });
+// A model and its texture image can be dropped together.
+viewport.addEventListener('drop', async e => {
   e.preventDefault();
-  const file = e.dataTransfer.files[0];
-  if (file) handleLoadModel(file);
+  viewport.classList.remove('is-dragover');
+  const files = [...e.dataTransfer.files];
+  const model = files.find(f => MODEL_EXT.test(f.name));
+  const image = files.find(f => IMAGE_EXT.test(f.name));
+  if (model) await handleLoadModel(model);
+  if (image && loadedModel) await handleLoadTexture(image);
 });
+
+// Hint over the default cube until a model is loaded.
+const dropHint = document.createElement('div');
+dropHint.id = 'drop-hint';
+dropHint.innerHTML = `
+  <p class="dh-title">Drop a 3D scan here</p>
+  <p class="dh-sub">OBJ, GLB or FBX — drop the texture image together with it</p>`;
+viewport.appendChild(dropHint);
+const syncDropHint = () => { dropHint.hidden = !!store.get('filename'); };
+store.subscribe('filename', syncDropHint);
+syncDropHint();
 
 // ── Aspect ratio ──────────────────────────────────────────────────────────────
 const ASPECT_CSS = {
