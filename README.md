@@ -1,6 +1,6 @@
 # lofi-viewer
 
-> Browser-based PSX/PS1-style 3D model viewer. Load any model, dial in the retro look, export.
+> From 3D scan to retro model and multi-color print. A browser tool that reduces scans to PS1-era models, renders them in the retro style, and exports multi-color 3D print files.
 
 https://github.com/user-attachments/assets/a7d788d3-29b8-494b-99d8-9cc5905b555e
 

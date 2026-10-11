@@ -10,7 +10,7 @@ export function buildTopbar(el) {
       </div>
       <div class="topbar-wordmark">
         <h1>lofi-viewer</h1>
-        <p>web-based PSX model viewer</p>
+        <p>From 3D scan to retro model and multi-color print</p>
       </div>
     </div>
     <div class="topbar-spacer"></div>
