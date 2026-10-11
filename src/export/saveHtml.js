@@ -12,7 +12,7 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
-export async function saveViewerHtml(modelFile, texFile = null, camState = null) {
+export async function saveViewerHtml(modelFile, texFile = null, camState = null, { bgImage = null } = {}) {
   if (!modelFile) { alert('No model loaded — load a model first.'); return; }
   const ext = modelFile.name.split('.').pop().toLowerCase();
   if (ext === 'fbx') {
@@ -34,9 +34,10 @@ export async function saveViewerHtml(modelFile, texFile = null, camState = null)
             : 'image/png';
   }
 
-  const settings = getPresetData();
+  const settings = { ...getPresetData(), lookEnabled: store.get('lookEnabled'), bgGradientColor: store.get('bgGradientColor') };
   const bgType  = store.get('bgType');
   const bgColor = store.get('bgColor');
+  settings.bgImage = bgType === 'image' ? imageToDataUrl(bgImage) : null;
 
   const html = buildHtml(b64, ext, settings, bgType, bgColor, texB64, texMime, camState);
 
@@ -47,6 +48,14 @@ export async function saveViewerHtml(modelFile, texFile = null, camState = null)
   a.download = modelFile.name.replace(/\.[^.]+$/, '') + '-lofi.html';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function imageToDataUrl(img) {
+  if (!img?.width) return null;
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  c.getContext('2d').drawImage(img, 0, 0);
+  return c.toDataURL('image/jpeg', 0.9);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -630,8 +639,39 @@ controls.dampingFactor = 0.07;
 controls.autoRotate = !!(SETTINGS.turntable);
 controls.autoRotateSpeed = -((SETTINGS.rotationSpeed ?? 1.0) * 2);
 
-// Background
-if (BG_TYPE === 'color') scene.background = new THREE.Color(BG_COLOR);
+// Background, set up as in the editor: the PSX path writes linear output
+// without encoding, so colours are passed through raw.
+if (BG_TYPE === 'color') scene.background = new THREE.Color().setStyle(BG_COLOR, THREE.LinearSRGBColorSpace);
+else if (BG_TYPE === 'gradient') {
+  const cvs = document.createElement('canvas');
+  cvs.width = 2; cvs.height = 256;
+  const ctx = cvs.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, BG_COLOR);
+  grad.addColorStop(1, SETTINGS.bgGradientColor ?? BG_COLOR);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 2, 256);
+  scene.background = new THREE.CanvasTexture(cvs);
+} else if (BG_TYPE === 'image' && SETTINGS.bgImage) {
+  new THREE.TextureLoader().load(SETTINGS.bgImage, tex => { scene.background = tex; });
+}
+
+// With the retro look off the editor shows plain shading, which needs lights.
+const LOOK_ON = SETTINGS.lookEnabled !== false;
+scene.add(new THREE.AmbientLight(0xffffff, SETTINGS.ambientIntensity ?? 0.5));
+const keyLight = new THREE.DirectionalLight(SETTINGS.lightColor ?? '#ffffff', SETTINGS.keyLightIntensity ?? 1.0);
+keyLight.position.set(2, 3, 2);
+scene.add(keyLight);
+const cleanBg = new THREE.Color(BG_COLOR);
+function renderClean() {
+  const bg = scene.background;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  if (bg?.isColor) scene.background = cleanBg;
+  renderer.setRenderTarget(null);
+  renderer.render(scene, camera);
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  scene.background = bg;
+}
 
 const pipeline = new PSXPipeline(renderer, scene, camera);
 
@@ -685,6 +725,7 @@ function applyCamera() {
 
 function setup(obj) {
   scene.add(obj);
+  if (!LOOK_ON) { frameObject(obj); applyCamera(); return; }
   pipeline.applyToScene();
   pipeline.applySettings(SETTINGS);
   frameObject(obj);    // sets near/far and a sensible default first
@@ -723,7 +764,7 @@ function animate(now) {
   const delta = Math.min((now - last) / 1000, 0.1);
   last = now;
   controls.update(delta);
-  pipeline.render(now * 0.001);
+  if (LOOK_ON) pipeline.render(now * 0.001); else renderClean();
 }
 requestAnimationFrame(animate);
 </script>

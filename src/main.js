@@ -939,7 +939,7 @@ async function handleSaveHtml() {
       near:   sc.perspCamera.near,
       far:    sc.perspCamera.far,
       fov:    sc.perspCamera.fov,
-    });
+    }, { bgImage: bgImageTex?.image });
   } catch (err) {
     alert(`HTML export failed: ${err.message || err}`);
   }
