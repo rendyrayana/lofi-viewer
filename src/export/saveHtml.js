@@ -658,8 +658,9 @@ else if (BG_TYPE === 'gradient') {
 
 // With the retro look off the editor shows plain shading, which needs lights.
 const LOOK_ON = SETTINGS.lookEnabled !== false;
-scene.add(new THREE.AmbientLight(0xffffff, SETTINGS.ambientIntensity ?? 0.5));
-const keyLight = new THREE.DirectionalLight(SETTINGS.lightColor ?? '#ffffff', SETTINGS.keyLightIntensity ?? 1.0);
+// Scaled by π to match the PSX shader's brightness, as in the editor.
+scene.add(new THREE.AmbientLight(0xffffff, (SETTINGS.ambientIntensity ?? 0.5) * Math.PI));
+const keyLight = new THREE.DirectionalLight(SETTINGS.lightColor ?? '#ffffff', (SETTINGS.keyLightIntensity ?? 1.0) * Math.PI);
 keyLight.position.set(2, 3, 2);
 scene.add(keyLight);
 const cleanBg = new THREE.Color(BG_COLOR);

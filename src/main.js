@@ -317,16 +317,27 @@ window.addEventListener('resize', () => { if (store.get('compare')) layoutCompar
 
 const cleanBg = new THREE.Color();
 
+// Three's standard materials divide light by π; the PSX shader does not. Clean
+// passes (original, Look off, print preview) scale the lights up so both use
+// the same brightness for the same light settings.
+function cleanLights(on) {
+  const k = on ? Math.PI : 1 / Math.PI;
+  sc.ambientLight.intensity *= k;
+  sc.keyLight.intensity *= k;
+}
+
 // Full-frame plain shading of the processed model (Look switched off).
 function renderClean() {
   const r = sc.renderer;
   processor.withClean(false, () => {
     const prevCS = r.outputColorSpace, prevBg = sc.scene.background;
     r.outputColorSpace = THREE.SRGBColorSpace;
+    cleanLights(true);
     if (prevBg?.isColor) sc.scene.background = cleanBg.set(store.get('bgColor'));
     r.setRenderTarget(null);
     r.render(sc.scene, sc.camera);
     r.outputColorSpace = prevCS;
+    cleanLights(false);
     sc.scene.background = prevBg;
   });
 }
@@ -338,10 +349,12 @@ function renderPrintPreview() {
   processor.entries.forEach(e => { e.mesh.visible = false; });
   previewGroup.visible = true;
   r.outputColorSpace = THREE.SRGBColorSpace;
+  cleanLights(true);
   if (prevBg?.isColor) sc.scene.background = cleanBg.set(store.get('bgColor'));
   r.setRenderTarget(null);
   r.render(sc.scene, sc.camera);
   r.outputColorSpace = prevCS;
+  cleanLights(false);
   sc.scene.background = prevBg;
   previewGroup.visible = false;
   processor.entries.forEach(e => { e.mesh.visible = true; });
@@ -355,6 +368,7 @@ function renderCompareOriginal() {
   processor.withClean(true, () => {
     const prevCS = r.outputColorSpace, prevBg = sc.scene.background;
     r.outputColorSpace = THREE.SRGBColorSpace;
+    cleanLights(true);
     if (prevBg?.isColor) sc.scene.background = cleanBg.set(store.get('bgColor'));
     r.setRenderTarget(null);
     r.setScissorTest(true);
@@ -362,6 +376,7 @@ function renderCompareOriginal() {
     r.render(sc.scene, sc.camera);
     r.setScissorTest(false);
     r.outputColorSpace = prevCS;
+    cleanLights(false);
     sc.scene.background = prevBg;
   });
 }
@@ -1120,6 +1135,7 @@ function renderSideBySide(t) {
   processor.withClean(true, () => {
     const prevCS = r.outputColorSpace, prevBg = sc.scene.background;
     r.outputColorSpace = THREE.SRGBColorSpace;
+    cleanLights(true);
     if (prevBg?.isColor) sc.scene.background = cleanBg.set(store.get('bgColor'));
     r.setRenderTarget(null);
     r.setScissorTest(true);
@@ -1127,6 +1143,7 @@ function renderSideBySide(t) {
     r.render(sc.scene, cam);
     r.setScissorTest(false);
     r.outputColorSpace = prevCS;
+    cleanLights(false);
     sc.scene.background = prevBg;
   });
   cam.clearViewOffset();
