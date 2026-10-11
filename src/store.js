@@ -62,6 +62,7 @@ const defaults = {
   aspectRatio: 'free',
   compare: false,
   compareSplit: 0.5,
+  compareLayout: 'split',
   // Effects
   crtCurvature: 0.0,
   scanlines: 0,
@@ -74,8 +75,9 @@ const defaults = {
   bloomIntensity: 0.5,
   // Export
   snapshotRes: 'native',
-  videoRes: 'native',
-  exportDuration: 4,
+  videoRes: '1080p',
+  exportDuration: 8,
+  videoLayout: 'side',
   printHeight: 60,
   printFilaments: 8,
   printMinArea: 2,

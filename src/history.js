@@ -6,7 +6,7 @@ import { store } from './store.js';
 const UNTRACKED = new Set([
   'activeTab', 'inverted', 'filename', 'filesize', 'tris', 'fps',
   'procStats', 'procBusy', 'loadBusy', 'loadMs',
-  'printPreview', 'printPreviewInfo', 'compare', 'compareSplit', 'turntable',
+  'printPreview', 'printPreviewInfo', 'compare', 'compareSplit', 'compareLayout', 'turntable',
 ]);
 const GROUP_MS = 400;
 const LIMIT = 100;

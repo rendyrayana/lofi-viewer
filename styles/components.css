@@ -821,3 +821,4 @@ input[type="number"]:focus { outline: 1px solid var(--c-text-dim); }
 .batch-list li.failed .bl-state { text-decoration: underline dotted; }
 .batch-outputs { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 10px; }
 .batch-outputs label { font-size: 12px; color: var(--c-text); display: inline-flex; gap: 5px; align-items: center; cursor: pointer; }
+#compare-overlay.is-side .cmp-handle { display: none; }

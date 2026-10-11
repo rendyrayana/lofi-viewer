@@ -1,12 +1,12 @@
 import { store } from '../../store.js';
 import { takeSnapshot } from '../../export/snapshot.js';
-import { recordTurntable, recordTurntableLoop } from '../../export/record.js';
+import { recordTurntable } from '../../export/record.js';
 import { shareLink } from '../../export/preset.js';
 import { buildBatchSection } from './batchSection.js';
 
 let printAdvancedOpen = false;
 
-export function buildExportPanel(el, getRenderer, getPipeline = null, getControls = null, onEnterViewer = null, onSaveHtml = null, { onExportPrint = null, onExportGlb = null, pairBatchFiles = null, onRunBatch = null } = {}) {
+export function buildExportPanel(el, getRenderer, getPipeline = null, getControls = null, onEnterViewer = null, onSaveHtml = null, { onExportPrint = null, onExportGlb = null, pairBatchFiles = null, onRunBatch = null, onRecordVideo = null, canRecordMp4 = false } = {}) {
   const s = store.state;
 
   el.innerHTML = `
@@ -29,34 +29,44 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
       </section>
 
       <section class="card">
-        <header class="card-head"><h3 class="card-title">Video</h3><p class="card-hint">Turntable recording (WebM)</p></header>
+        <header class="card-head"><h3 class="card-title">Video</h3><p class="card-hint">One full turntable turn, frame-accurate MP4</p></header>
         <div class="card-body">
           <div class="panel-row">
-            <label for="sel-vidres">Resolution</label>
+            <label for="sel-vidlayout">Layout</label>
             <div class="row-right">
-              <select id="sel-vidres">
-                <option value="native" ${s.videoRes === 'native' ? 'selected' : ''}>Native</option>
-                <option value="2x" ${s.videoRes === '2x' ? 'selected' : ''}>2×</option>
-                <option value="4x" ${s.videoRes === '4x' ? 'selected' : ''}>4×</option>
+              <select id="sel-vidlayout">
+                <option value="single" ${s.videoLayout === 'single' ? 'selected' : ''}>Processed only</option>
+                <option value="side" ${s.videoLayout === 'side' ? 'selected' : ''}>Side by side with original</option>
               </select>
             </div>
           </div>
           <div class="panel-row">
-            <label for="inp-duration">Duration (sec)</label>
+            <label for="inp-duration">Seconds per turn</label>
             <div class="row-right">
-              <input type="number" id="inp-duration" min="1" max="60" step="1" value="${s.exportDuration}" />
+              <input type="number" id="inp-duration" min="2" max="60" step="1" value="${s.exportDuration}" />
             </div>
           </div>
-          <div class="btn-row">
-            <button class="btn btn-ghost" id="btn-record">Record Duration</button>
-            <button class="btn btn-ghost" id="btn-record-loop" title="Records exactly one full turntable rotation">Record One Loop</button>
+          <div class="panel-row">
+            <label for="sel-vidres">Resolution</label>
+            <div class="row-right">
+              <select id="sel-vidres">
+                <option value="native" ${s.videoRes === 'native' ? 'selected' : ''}>Viewport</option>
+                <option value="1080p" ${s.videoRes === '1080p' ? 'selected' : ''}>1080p (1920×1080)</option>
+                <option value="4k" ${s.videoRes === '4k' ? 'selected' : ''}>4K (3840×2160)</option>
+              </select>
+            </div>
           </div>
+          ${canRecordMp4 ? `
+          <button class="btn btn-primary" id="btn-record-mp4">Record turntable (MP4)</button>` : `
+          <p class="step-note">This browser can't encode MP4; recording falls back to real-time WebM.</p>
+          <button class="btn btn-ghost" id="btn-record">Record (WebM)</button>`}
           <div class="record-progress" id="record-progress" hidden>
             <div class="record-progress-track">
               <div class="record-progress-fill" id="record-progress-fill"></div>
             </div>
             <span class="record-progress-label" id="record-progress-label">0%</span>
           </div>
+          <div class="proc-status" id="video-status" aria-live="polite"></div>
         </div>
       </section>
 
@@ -160,33 +170,25 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
   el.querySelector('#inp-duration').addEventListener('change', e => store.set('exportDuration', parseInt(e.target.value)));
 
   el.querySelector('#btn-snapshot').addEventListener('click', () => takeSnapshot(getRenderer()));
-  el.querySelector('#btn-record').addEventListener('click', () => recordTurntable(getRenderer(), store.get('exportDuration'), store.get('videoRes'), getPipeline?.()));
-  el.querySelector('#btn-record-loop').addEventListener('click', () => {
-    const btn      = el.querySelector('#btn-record-loop');
-    const btnFixed = el.querySelector('#btn-record');
-    const progress = el.querySelector('#record-progress');
-    const fill     = el.querySelector('#record-progress-fill');
-    const label    = el.querySelector('#record-progress-label');
-
-    btn.disabled = true;
-    btnFixed.disabled = true;
-    progress.hidden = false;
-    fill.style.width = '0%';
-    label.textContent = '0%';
-
-    recordTurntableLoop(
-      getRenderer(), getControls?.(), store.get('videoRes'), getPipeline?.(),
-      pct => {
-        const p = Math.round(pct);
-        fill.style.width = p + '%';
-        label.textContent = p + '%';
-      },
-      () => {
-        progress.hidden = true;
-        btn.disabled = false;
-        btnFixed.disabled = false;
-      },
-    );
+  el.querySelector('#sel-vidlayout').addEventListener('change', e => store.set('videoLayout', e.target.value));
+  el.querySelector('#btn-record')?.addEventListener('click', () => recordTurntable(getRenderer(), store.get('exportDuration'), store.get('videoRes'), getPipeline?.()));
+  el.querySelector('#btn-record-mp4')?.addEventListener('click', async () => {
+    const btn = el.querySelector('#btn-record-mp4');
+    const progress = el.querySelector('#record-progress'), fill = el.querySelector('#record-progress-fill'), label = el.querySelector('#record-progress-label');
+    const status = el.querySelector('#video-status');
+    btn.disabled = true; progress.hidden = false; status.textContent = '';
+    fill.style.width = '0%'; label.textContent = '0%';
+    try {
+      status.textContent = await onRecordVideo({
+        layout: store.get('videoLayout'),
+        onProgress: p => { const pct = Math.round(p * 100); fill.style.width = pct + '%'; label.textContent = pct + '%'; },
+      });
+    } catch (e) {
+      console.error('Video recording failed:', e);
+      status.textContent = `Recording failed: ${e.message}`;
+    } finally {
+      btn.disabled = false; progress.hidden = true;
+    }
   });
   el.querySelector('#inp-printheight').addEventListener('change', e => {
     const v = Math.min(400, Math.max(5, parseFloat(e.target.value) || 60));

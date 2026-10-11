@@ -13,7 +13,8 @@ import { ModelProcessor } from './process/processor.js';
 import { buildExportPanel } from './ui/sidebar/exportPanel.js';
 import { buildStatusIndicator } from './ui/statusIndicator.js';
 import { undo, redo, onHistoryChange, setHistoryApplyHandler } from './history.js';
-import { loadPresetFromURL, getPresetData } from './export/preset.js';
+import { loadPresetFromURL, getPresetData, PROCESS_TARGETS, LOOK_PRESETS } from './export/preset.js';
+import { encodeMp4, canRecordMp4 } from './export/videoLoop.js';
 import { saveViewerHtml } from './export/saveHtml.js';
 import { collectFaces, prepareMesh, build3mf, buildObjMtl, downloadFile } from './export/print3mf.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -102,7 +103,7 @@ function showPanel(tab) {
     });
     panelContent.scrollTop = scroll;
   } else if (tab === 'export') {
-    panelCleanup = buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExportPrint: handleExportPrint, onExportGlb: handleExportGlb, pairBatchFiles, onRunBatch: runBatch });
+    panelCleanup = buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExportPrint: handleExportPrint, onExportGlb: handleExportGlb, pairBatchFiles, onRunBatch: runBatch, onRecordVideo: handleRecordVideo, canRecordMp4: canRecordMp4() });
   }
 }
 
@@ -239,7 +240,12 @@ window.addEventListener('keydown', e => {
 });
 
 const tbCompare = toolbar.querySelector('#tb-compare');
-tbCompare.addEventListener('click', () => store.set('compare', !store.get('compare')));
+// Compare cycles: off → split divider → side by side → off.
+tbCompare.addEventListener('click', () => {
+  if (!store.get('compare')) store.setMany({ compare: true, compareLayout: 'split' });
+  else if (store.get('compareLayout') === 'split') store.set('compareLayout', 'side');
+  else store.set('compare', false);
+});
 
 // Compare overlay: draggable divider; left = original scan, right = processed.
 const compareEl = document.createElement('div');
@@ -259,7 +265,7 @@ const cmpRight = compareEl.querySelector('.cmp-right');
 
 function layoutCompare() {
   const r = canvas.getBoundingClientRect(), vp = compareEl.parentElement.getBoundingClientRect();
-  const x = r.left - vp.left + r.width * store.get('compareSplit');
+  const x = r.left - vp.left + r.width * (store.get('compareLayout') === 'side' ? 0.5 : store.get('compareSplit'));
   cmpLine.style.left = `${x}px`;
   cmpHandle.style.left = `${x}px`;
   cmpLeft.style.right = `${vp.width - x + 8}px`;
@@ -292,7 +298,15 @@ cmpHandle.addEventListener('keydown', e => {
   store.set('compareSplit', Math.min(1, Math.max(0, store.get('compareSplit') + d)));
 });
 
+function syncCompareUi() {
+  const on = store.get('compare'), side = store.get('compareLayout') === 'side';
+  compareEl.classList.toggle('is-side', side);
+  tbCompare.title = !on ? 'Compare with original (C)' : side ? 'Compare: side by side — click to turn off (C)' : 'Compare: split — click for side by side (C)';
+  if (on) layoutCompare();
+}
+store.subscribe('compareLayout', syncCompareUi);
 store.subscribe('compare', on => {
+  syncCompareUi();
   compareEl.hidden = !on;
   tbCompare.classList.toggle('active', on);
   tbCompare.setAttribute('aria-pressed', String(on));
@@ -705,6 +719,123 @@ async function handleExportPrint(format = '3mf') {
   return lines.join('\n');
 }
 
+// ── Turntable video (frame-accurate MP4) ──────────────────────────────────────
+function processedLabel() {
+  const s = store.state, st = s.procStats;
+  if (s.printPreview) return `Print colors${previewGroup ? ` · ${store.get('printPreviewInfo').replace(/^Preview: /, '')}` : ''}`;
+  const parts = [PROCESS_TARGETS[s.procTarget] ? `${PROCESS_TARGETS[s.procTarget].label} target` : 'Processed'];
+  if (st) {
+    if (s.procDecimate) parts.push(`${st.tris.toLocaleString()} tris`);
+    if (st.texW && s.procTexSize !== 'original') parts.push(`${st.texW} px`);
+    if (s.procPalette !== 'off' && st.colors) parts.push(`${st.colors} colors`);
+  }
+  if (s.lookEnabled && LOOK_PRESETS[s.lookPreset]) parts.push(LOOK_PRESETS[s.lookPreset].label);
+  return parts.join(' · ');
+}
+
+function drawVideoLabels(ctx, w, h, left, right) {
+  ctx.save();
+  // Largest font (up to 3% of height) at which both labels fit their half.
+  let size = Math.max(10, Math.round(h * 0.03));
+  const fits = () => {
+    ctx.font = `${size}px "Space Mono", ui-monospace, monospace`;
+    return Math.max(ctx.measureText(left).width, ctx.measureText(right).width) + size * 1.2 <= w * 0.46;
+  };
+  while (size > 9 && !fits()) size--;
+  ctx.textBaseline = 'middle';
+  const pill = (text, cx) => {
+    const tw = ctx.measureText(text).width, pad = size * 0.6, ph = size * 1.8;
+    const x = Math.round(cx - tw / 2 - pad), y = Math.round(size * 1.2);
+    ctx.fillStyle = 'rgba(20, 20, 20, 0.78)';
+    ctx.beginPath(); ctx.roundRect(x, y, tw + pad * 2, ph, ph / 2); ctx.fill();
+    ctx.fillStyle = '#e6e6e4';
+    ctx.fillText(text, x + pad, y + ph / 2);
+  };
+  ctx.fillStyle = 'rgba(230, 230, 228, 0.55)';
+  ctx.fillRect(Math.round(w / 2) - 1, 0, 2, h);
+  pill(left, w / 4);
+  pill(right, (w * 3) / 4);
+  ctx.restore();
+}
+
+const VIDEO_SIZES = { '1080p': [1920, 1080], '4k': [3840, 2160] };
+
+// One exact camera revolution, rendered frame by frame and encoded to MP4.
+// layout: 'single' (processed view) or 'side' (original | processed).
+// size: 'native' (viewport pixels), '1080p' or '4k' — rendered off-screen.
+// The camera keeps its elevation but is re-framed so the model fills the
+// frame (or each half, side by side).
+async function recordTurntableVideo({ seconds = 8, fps = 30, layout = 'single', size = '1080p', onProgress } = {}) {
+  if (!canRecordMp4()) throw new Error('This browser does not support video encoding (WebCodecs).');
+  if (!processor.hasModel) throw new Error('Load a model first.');
+  await settleProcessing();
+  if (store.get('printPreview') && !previewGroup) await refreshPreview();
+
+  const r = sc.renderer, cam = sc.camera;
+  const [vw, vh] = VIDEO_SIZES[size] ?? [r.domElement.width, r.domElement.height];
+  const saved = { pos: cam.position.clone(), zoom: cam.zoom, ratio: r.getPixelRatio(), turning: store.get('turntable'), target: sc.controls.target.clone() };
+  store.set('turntable', false);
+
+  const box = new THREE.Box3();
+  for (const e of processor.entries) box.expandByObject(e.mesh);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const target = sphere.center;
+  const sph = new THREE.Spherical().setFromVector3(saved.pos.clone().sub(saved.target));
+  const theta0 = sph.theta;
+
+  r.setPixelRatio(1);
+  r.setSize(vw, vh, false);
+  pipeline.resize(vw, vh);
+  const asp = vw / vh, aspFit = layout === 'side' ? asp / 2 : asp;
+  if (cam.isPerspectiveCamera) {
+    cam.aspect = asp;
+    const vfov = THREE.MathUtils.degToRad(cam.fov);
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspFit);
+    sph.radius = (sphere.radius * 1.12) / Math.sin(Math.min(vfov, hfov) / 2);
+  } else {
+    cam.left = -cam.top * asp; cam.right = cam.top * asp;
+    cam.zoom = Math.min(cam.top, cam.top * aspFit) / (sphere.radius * 1.12);
+  }
+  cam.updateProjectionMatrix();
+
+  const right = processedLabel();
+  const frames = Math.max(2, Math.round(seconds * fps));
+  const v = new THREE.Vector3();
+  recording = true;
+  try {
+    return await encodeMp4({
+      width: vw, height: vh, frames, fps, onProgress,
+      drawFrame: (i, ctx, w, h) => {
+        sph.theta = theta0 - (2 * Math.PI * i) / frames;
+        cam.position.copy(target).add(v.setFromSpherical(sph));
+        cam.lookAt(target);
+        renderFrame(i / fps, layout === 'side' ? 'side' : null);
+        ctx.drawImage(r.domElement, 0, 0, w, h);
+        if (layout === 'side') drawVideoLabels(ctx, w, h, 'Original scan', right);
+      },
+    });
+  } finally {
+    recording = false;
+    r.setPixelRatio(saved.ratio);
+    sc.resize();
+    pipeline.resize(canvas.clientWidth, canvas.clientHeight);
+    cam.zoom = saved.zoom;
+    cam.position.copy(saved.pos);
+    sc.controls.target.copy(saved.target);
+    cam.lookAt(saved.target);
+    cam.updateProjectionMatrix();
+    sc.controls.update();
+    store.set('turntable', saved.turning);
+  }
+}
+
+async function handleRecordVideo({ layout, onProgress }) {
+  const bytes = await recordTurntableVideo({ seconds: store.get('exportDuration'), layout, size: store.get('videoRes'), onProgress });
+  const name = `${exportBaseName()}-turntable${layout === 'side' ? '-compare' : ''}.mp4`;
+  downloadFile(bytes, name, 'video/mp4');
+  return `${name} · ${(bytes.length / 1048576).toFixed(1)} MB`;
+}
+
 // ── Print preview: the exact per-face filament colours in the viewport ───────
 let previewGroup = null, previewTimer = null, previewToken = 0;
 
@@ -889,6 +1020,7 @@ hudTris.textContent = '  ' + store.get('tris').toLocaleString();
 
 // ── Render loop ───────────────────────────────────────────────────────────────
 let lastTime = performance.now(), frameCount = 0, fpsTimer = 0;
+let recording = false;
 
 function animate(time) {
   requestAnimationFrame(animate);
@@ -914,7 +1046,20 @@ function animate(time) {
   sc.controls.autoRotateSpeed = -(s.rotationSpeed * 2); // negative = clockwise
   sc.controls.update(delta); // pass delta so rotation is frame-rate independent
 
-  // Camera
+  if (!recording) renderFrame(time * 0.001, s.compare ? store.get('compareLayout') : null);
+}
+
+function renderProcessed(t) {
+  const s = store.state;
+  if (s.printPreview && previewGroup) renderPrintPreview();
+  else if (s.lookEnabled) pipeline.render(t);
+  else renderClean();
+}
+
+// Draws one frame of the viewport. layout: null (processed only), 'split'
+// (divider over one object) or 'side' (original and processed side by side).
+function renderFrame(t, layout = null) {
+  const s = store.state;
   const cam = sc.camera;
   if (cam.isPerspectiveCamera) { cam.fov = s.fov; cam.updateProjectionMatrix(); }
 
@@ -931,6 +1076,8 @@ function animate(time) {
   syncEnv();
   pipeline.updateFromStore(s);
 
+  if (layout === 'side' && processor.hasModel) { renderSideBySide(t); return; }
+
   // Depth prepass: render scene geometry to the default framebuffer with
   // colorWrite:false. This populates the screen depth buffer with real 3D
   // depths so overlays (grid, wireframe) can correctly depth-test against
@@ -944,10 +1091,8 @@ function animate(time) {
     sc.scene.overrideMaterial = null;
   }
 
-  if (s.printPreview && previewGroup) renderPrintPreview();
-  else if (s.lookEnabled) pipeline.render(time * 0.001);
-  else renderClean();
-  if (s.compare && processor.hasModel) renderCompareOriginal();
+  renderProcessed(t);
+  if (layout === 'split' && processor.hasModel) renderCompareOriginal();
 
   // Full-resolution overlays: depth-test against the prepass depth so the
   // grid is correctly occluded by the model.
@@ -958,6 +1103,30 @@ function animate(time) {
     if (s.wireframe) pipeline.renderWireframeOverlay(sc.camera);
     sc.renderer.autoClear = true;
   }
+}
+
+// Original scan on the left half, processed result on the right; the camera
+// view is shifted so the model sits in the middle of each half.
+const sizeVec = new THREE.Vector2();
+function renderSideBySide(t) {
+  const r = sc.renderer, cam = sc.camera;
+  const { x: W, y: H } = r.getSize(sizeVec);
+  cam.setViewOffset(W, H, -W / 4, 0, W, H);
+  renderProcessed(t);
+  cam.setViewOffset(W, H, W / 4, 0, W, H);
+  processor.withClean(true, () => {
+    const prevCS = r.outputColorSpace, prevBg = sc.scene.background;
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    if (prevBg?.isColor) sc.scene.background = cleanBg.set(store.get('bgColor'));
+    r.setRenderTarget(null);
+    r.setScissorTest(true);
+    r.setScissor(0, 0, Math.floor(W / 2), H);
+    r.render(sc.scene, cam);
+    r.setScissorTest(false);
+    r.outputColorSpace = prevCS;
+    sc.scene.background = prevBg;
+  });
+  cam.clearViewOffset();
 }
 
 // ── Resize ────────────────────────────────────────────────────────────────────
