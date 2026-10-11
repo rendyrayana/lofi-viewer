@@ -83,8 +83,6 @@ function showPanel(tab) {
       onLoadTexture: handleLoadTexture,
       onLoadHDRI: handleLoadHDRI,
       onClearScene: handleClearScene,
-      pairBatchFiles,
-      onRunBatch: runBatch,
     });
   } else if (tab === 'process') {
     panelCleanup = buildProcessPanel(div, {
@@ -104,7 +102,7 @@ function showPanel(tab) {
     });
     panelContent.scrollTop = scroll;
   } else if (tab === 'export') {
-    panelCleanup = buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExportPrint: handleExportPrint, onExportGlb: handleExportGlb });
+    panelCleanup = buildExportPanel(div, () => sc.renderer, () => pipeline, () => sc.controls, enterViewerMode, handleSaveHtml, { onExportPrint: handleExportPrint, onExportGlb: handleExportGlb, pairBatchFiles, onRunBatch: runBatch });
   }
 }
 

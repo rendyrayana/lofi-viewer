@@ -2,10 +2,11 @@ import { store } from '../../store.js';
 import { takeSnapshot } from '../../export/snapshot.js';
 import { recordTurntable, recordTurntableLoop } from '../../export/record.js';
 import { shareLink } from '../../export/preset.js';
+import { buildBatchSection } from './batchSection.js';
 
 let printAdvancedOpen = false;
 
-export function buildExportPanel(el, getRenderer, getPipeline = null, getControls = null, onEnterViewer = null, onSaveHtml = null, { onExportPrint = null, onExportGlb = null } = {}) {
+export function buildExportPanel(el, getRenderer, getPipeline = null, getControls = null, onEnterViewer = null, onSaveHtml = null, { onExportPrint = null, onExportGlb = null, pairBatchFiles = null, onRunBatch = null } = {}) {
   const s = store.state;
 
   el.innerHTML = `
@@ -150,6 +151,7 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
           </div>
         </div>
       </section>
+      <div id="batch-slot"></div>
     </div>
   `;
 
@@ -197,6 +199,7 @@ export function buildExportPanel(el, getRenderer, getPipeline = null, getControl
   el.querySelector('#sel-smooth').addEventListener('change', e => store.set('printSmooth', parseInt(e.target.value, 10)));
   el.querySelector('#sw-mergeshades-print').addEventListener('change', e => store.set('procMergeShades', e.target.checked));
   el.querySelector('#sw-printpreview').addEventListener('change', e => store.set('printPreview', e.target.checked));
+  buildBatchSection(el.querySelector('#batch-slot'), { pairBatchFiles, onRunBatch });
   el.querySelector('#print-advanced').addEventListener('toggle', e => { printAdvancedOpen = e.target.open; });
   const unsubs = [
     store.subscribe('printPreviewInfo', v => { el.querySelector('#preview-info').textContent = v || ''; }),
