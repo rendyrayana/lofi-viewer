@@ -35,7 +35,7 @@ const defaults = {
   // Render
   renderScale: 0.25,
   vertexSnap: false,
-  snapPrecision: 64,
+  snapSize: 1,
   colorDepth: '15bit',
   ditherPattern: 'bayer4',
   affineWarp: false,
@@ -92,7 +92,7 @@ export { defaults };
 
 export const PANEL_KEYS = {
   process: ['procDecimate','procTargetTris','procFlat','procTexSize','procTexFilter','procTexMode','procTexDensity','procSaturation','procContrast','procPalette','procPreset','procColors','procMergeShades','procCustom','procDither','procDitherPattern','procDitherStrength'],
-  render: ['renderScale','vertexSnap','snapPrecision','colorDepth','ditherPattern','affineWarp','textureFilter','wireframe','backfaceCulling','showGrid'],
+  render: ['renderScale','vertexSnap','snapSize','colorDepth','ditherPattern','affineWarp','textureFilter','wireframe','backfaceCulling','showGrid'],
   environment: ['bgType','bgColor','bgGradientColor','ambientIntensity','keyLightIntensity','lightColor','exposure','fogDensity','fogColor'],
   effects: ['crtCurvature','scanlines','scanlineOpacity','vignette','chromaticAberration','filmGrain','colorGrade','bloom','bloomIntensity'],
   camera: ['projection','fov','turntable','rotationSpeed','autoFrame','aspectRatio'],

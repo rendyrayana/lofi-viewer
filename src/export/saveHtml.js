@@ -127,7 +127,7 @@ const blobUrl = URL.createObjectURL(new Blob([b64ToArrayBuffer(MODEL_B64)], { ty
 
 // ── Shaders ──────────────────────────────────────────────────────────────────
 const PSX_VERT = \`
-uniform float uSnapPrecision;
+uniform vec2 uSnapGrid;
 uniform bool uVertexSnap;
 out vec2 vUv;
 out vec3 vAffineUvW;
@@ -140,10 +140,8 @@ void main() {
   vViewPos = -mvPos.xyz;
   gl_Position = projectionMatrix * mvPos;
   if (uVertexSnap) {
-    float snap = uSnapPrecision;
     gl_Position.xyz /= gl_Position.w;
-    gl_Position.x = floor(gl_Position.x * snap + 0.5) / snap;
-    gl_Position.y = floor(gl_Position.y * snap + 0.5) / snap;
+    gl_Position.xy = floor(gl_Position.xy * uSnapGrid + 0.5) / uSnapGrid;
     gl_Position.xyz *= gl_Position.w;
   }
   vAffineUvW = vec3(uv * gl_Position.w, gl_Position.w);
@@ -363,7 +361,7 @@ class PSXPipeline {
     this.psxMaterials = [];
 
     this.globalUniforms = {
-      uSnapPrecision:    { value: 64 },
+      uSnapGrid:         { value: new THREE.Vector2(160, 120) },
       uVertexSnap:       { value: false },
       uAffineWarp:       { value: false },
       uExposure:         { value: 1.0 },
@@ -465,7 +463,7 @@ class PSXPipeline {
     const mat = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
       uniforms: {
-        uSnapPrecision: this.globalUniforms.uSnapPrecision,
+        uSnapGrid: this.globalUniforms.uSnapGrid,
         uVertexSnap:    this.globalUniforms.uVertexSnap,
         uAffineWarp:    this.globalUniforms.uAffineWarp,
         uExposure:      this.globalUniforms.uExposure,
@@ -519,7 +517,8 @@ class PSXPipeline {
   }
 
   applySettings(s) {
-    this.globalUniforms.uSnapPrecision.value = s.snapPrecision  ?? 64;
+    const snap = Math.max(0.25, s.snapSize ?? 1);
+    this.globalUniforms.uSnapGrid.value.set(this.psxRT.width / (2 * snap), this.psxRT.height / (2 * snap));
     this.globalUniforms.uVertexSnap.value    = s.vertexSnap     ?? false;
     this.globalUniforms.uAffineWarp.value    = s.affineWarp     ?? false;
     this.globalUniforms.uExposure.value      = s.exposure       ?? 1.0;

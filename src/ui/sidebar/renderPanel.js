@@ -30,10 +30,10 @@ export function buildRenderPanel(el, { onReset } = {}) {
       </div>
 
       <div class="panel-row">
-        <label for="sl-snapprecision">Snap Precision</label>
+        <label for="sl-snapprecision">Snap Size<small class="proc-hint">In render pixels · 1 = PS1 integer coordinates</small></label>
         <div class="row-right">
-          <input type="range" id="sl-snapprecision" min="8" max="512" step="8" value="${s.snapPrecision}" />
-          <span class="row-value" id="lbl-snapprecision">${s.snapPrecision}</span>
+          <input type="range" id="sl-snapprecision" min="0.5" max="8" step="0.5" value="${s.snapSize}" />
+          <span class="row-value" id="lbl-snapprecision">${s.snapSize} px</span>
         </div>
       </div>
 
@@ -119,9 +119,9 @@ export function buildRenderPanel(el, { onReset } = {}) {
   const slSnap = el.querySelector('#sl-snapprecision');
   const lblSnap = el.querySelector('#lbl-snapprecision');
   slSnap.addEventListener('input', () => {
-    const v = parseInt(slSnap.value);
-    store.set('snapPrecision', v);
-    lblSnap.textContent = v;
+    const v = parseFloat(slSnap.value);
+    store.set('snapSize', v);
+    lblSnap.textContent = `${v} px`;
   });
 
   el.querySelector('#sw-vertexsnap').addEventListener('change', e => store.set('vertexSnap', e.target.checked));

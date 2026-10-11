@@ -1,5 +1,7 @@
 export const PSX_VERT = /* glsl */`
-uniform float uSnapPrecision;
+// Snap grid in NDC units per axis: (render size / 2) / snap size in pixels,
+// so vertices land on the low-resolution pixel grid like PS1 integer coords.
+uniform vec2 uSnapGrid;
 uniform bool uVertexSnap;
 
 out vec2 vUv;
@@ -17,10 +19,8 @@ void main() {
   gl_Position = projectionMatrix * mvPos;
 
   if (uVertexSnap) {
-    float snap = uSnapPrecision;
     gl_Position.xyz /= gl_Position.w;
-    gl_Position.x = floor(gl_Position.x * snap + 0.5) / snap;
-    gl_Position.y = floor(gl_Position.y * snap + 0.5) / snap;
+    gl_Position.xy = floor(gl_Position.xy * uSnapGrid + 0.5) / uSnapGrid;
     gl_Position.xyz *= gl_Position.w;
   }
 

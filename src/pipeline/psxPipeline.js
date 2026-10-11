@@ -38,7 +38,7 @@ export class PSXPipeline {
     this.psxMeshes = [];
 
     this.globalUniforms = {
-      uSnapPrecision: { value: 64 },
+      uSnapGrid: { value: new THREE.Vector2(160, 120) },
       uVertexSnap:    { value: false },
       uAffineWarp:    { value: false },
       uExposure:         { value: 1.0 },
@@ -175,7 +175,7 @@ export class PSXPipeline {
     const mat = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
       uniforms: {
-        uSnapPrecision: this.globalUniforms.uSnapPrecision,
+        uSnapGrid: this.globalUniforms.uSnapGrid,
         uVertexSnap:    this.globalUniforms.uVertexSnap,
         uAffineWarp:    this.globalUniforms.uAffineWarp,
         uExposure:      this.globalUniforms.uExposure,
@@ -323,7 +323,8 @@ export class PSXPipeline {
 
   // ── State sync ───────────────────────────────────────────────────────────────
   updateFromStore(state) {
-    this.globalUniforms.uSnapPrecision.value = state.snapPrecision;
+    const snap = Math.max(0.25, state.snapSize ?? 1);
+    this.globalUniforms.uSnapGrid.value.set(this.psxRT.width / (2 * snap), this.psxRT.height / (2 * snap));
     this.globalUniforms.uVertexSnap.value    = state.vertexSnap;
     this.globalUniforms.uAffineWarp.value    = state.affineWarp;
     this.globalUniforms.uExposure.value      = state.exposure ?? 1.0;

@@ -1,7 +1,7 @@
 import { store, defaults } from '../store.js';
 
 const PRESET_KEYS = [
-  'renderScale','vertexSnap','snapPrecision','colorDepth','ditherPattern',
+  'renderScale','vertexSnap','snapSize','colorDepth','ditherPattern',
   'affineWarp','textureFilter','wireframe','backfaceCulling',
   'bgType','bgColor','ambientIntensity','keyLightIntensity','lightColor',
   'exposure','fogDensity','fogColor',
@@ -51,7 +51,7 @@ export const LOOK_PRESETS = {
   ps1Crt: {
     label: 'PS1 on CRT', group: 'Console',
     settings: {
-      renderScale: 0.25, vertexSnap: true, snapPrecision: 64, colorDepth: '15bit', ditherPattern: 'bayer4',
+      renderScale: 0.25, vertexSnap: true, snapSize: 1, colorDepth: '15bit', ditherPattern: 'bayer4',
       affineWarp: true, textureFilter: 'nearest',
       crtCurvature: 0.1, scanlines: 0.4, scanlineOpacity: 0.25, vignette: 0.3, chromaticAberration: 0.1, filmGrain: 0.05,
     },
@@ -59,7 +59,7 @@ export const LOOK_PRESETS = {
   ps1Clean: {
     label: 'PS1 clean', group: 'Console',
     settings: {
-      renderScale: 0.25, vertexSnap: true, snapPrecision: 64, colorDepth: '15bit', ditherPattern: 'bayer4',
+      renderScale: 0.25, vertexSnap: true, snapSize: 1, colorDepth: '15bit', ditherPattern: 'bayer4',
       affineWarp: true, textureFilter: 'nearest',
     },
   },
@@ -73,7 +73,7 @@ export const LOOK_PRESETS = {
   saturn: {
     label: 'Saturn', group: 'Console',
     settings: {
-      renderScale: 0.25, vertexSnap: true, snapPrecision: 48, colorDepth: '15bit', ditherPattern: 'none',
+      renderScale: 0.25, vertexSnap: true, snapSize: 1, colorDepth: '15bit', ditherPattern: 'none',
       affineWarp: true, textureFilter: 'nearest', scanlines: 0.4, scanlineOpacity: 0.2, vignette: 0.2,
     },
   },
@@ -94,14 +94,14 @@ export const LOOK_PRESETS = {
   handheld: {
     label: 'Handheld LCD', group: 'Handheld',
     settings: {
-      renderScale: 0.15, vertexSnap: true, snapPrecision: 32, colorDepth: '24bit', ditherPattern: 'none',
+      renderScale: 0.15, vertexSnap: true, snapSize: 1, colorDepth: '24bit', ditherPattern: 'none',
       textureFilter: 'nearest', bgColor: '#9bbc0f', ambientIntensity: 0.9, keyLightIntensity: 0.4,
     },
   },
   virtualBoy: {
     label: 'Virtual Boy', group: 'Handheld',
     settings: {
-      renderScale: 0.2, vertexSnap: true, snapPrecision: 32, colorDepth: '24bit', ditherPattern: 'none',
+      renderScale: 0.2, vertexSnap: true, snapSize: 1, colorDepth: '24bit', ditherPattern: 'none',
       textureFilter: 'nearest', bgColor: '#000000', ambientIntensity: 0.9, keyLightIntensity: 0.4,
       scanlines: 0.5, scanlineOpacity: 0.3,
     },
@@ -109,7 +109,7 @@ export const LOOK_PRESETS = {
   pico8: {
     label: 'PICO-8', group: 'Handheld',
     settings: {
-      renderScale: 0.12, vertexSnap: true, snapPrecision: 32, colorDepth: '24bit', ditherPattern: 'none',
+      renderScale: 0.12, vertexSnap: true, snapSize: 1, colorDepth: '24bit', ditherPattern: 'none',
       textureFilter: 'nearest', bgColor: '#1d2b53',
     },
   },
@@ -120,7 +120,7 @@ export const LOOK_PRESETS = {
   horror: {
     label: 'Horror night', group: 'Mood',
     settings: {
-      renderScale: 0.2, vertexSnap: true, snapPrecision: 48, colorDepth: '15bit',
+      renderScale: 0.2, vertexSnap: true, snapSize: 1, colorDepth: '15bit',
       ditherPattern: 'bayer4', affineWarp: true, textureFilter: 'nearest',
       ambientIntensity: 0.1, keyLightIntensity: 0.5, lightColor: '#334466',
       exposure: 0.7, fogDensity: 0.08, fogColor: '#111122', crtCurvature: 0.2,
@@ -130,7 +130,7 @@ export const LOOK_PRESETS = {
   retro: {
     label: 'Retro arcade', group: 'Mood',
     settings: {
-      renderScale: 0.25, vertexSnap: true, snapPrecision: 96, colorDepth: '15bit',
+      renderScale: 0.25, vertexSnap: true, snapSize: 1, colorDepth: '15bit',
       ditherPattern: 'bayer4', affineWarp: true, textureFilter: 'nearest',
       ambientIntensity: 0.6, keyLightIntensity: 1.2, lightColor: '#ffeecc',
       exposure: 1.1, crtCurvature: 0.3, scanlines: 0.6,
@@ -153,7 +153,7 @@ export const PROCESS_TARGETS = {
 };
 
 const LOOK_KEYS = [
-  'renderScale', 'vertexSnap', 'snapPrecision', 'colorDepth', 'ditherPattern', 'affineWarp', 'textureFilter',
+  'renderScale', 'vertexSnap', 'snapSize', 'colorDepth', 'ditherPattern', 'affineWarp', 'textureFilter',
   'bgColor', 'ambientIntensity', 'keyLightIntensity', 'lightColor', 'exposure', 'fogDensity', 'fogColor',
   'crtCurvature', 'scanlines', 'scanlineOpacity', 'vignette', 'chromaticAberration', 'filmGrain', 'colorGrade', 'bloom', 'bloomIntensity',
 ];
