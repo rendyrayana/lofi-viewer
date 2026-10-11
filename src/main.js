@@ -443,6 +443,9 @@ async function handleLoadTexture(file) {
     if (child.isMesh && child.material) {
       child.material.uniforms.map.value = tex;
       child.material.uniforms.uHasMap.value = true;
+      // Drop the untextured placeholder grey, which would darken the texture
+      // (exports use white under a texture).
+      child.material.uniforms.diffuse.value.set(1, 1, 1);
     }
   });
   processor.setSourceMap(tex);

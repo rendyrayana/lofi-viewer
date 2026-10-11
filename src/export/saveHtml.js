@@ -660,12 +660,14 @@ function frameObject(obj) {
 }
 
 function applyOverrideTex(tex) {
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = tex.minFilter = THREE.NearestFilter;
   tex.needsUpdate = true;
-  // Don't override diffuse — matches editor behavior (handleLoadTexture doesn't reset diffuse).
+  // White diffuse under the texture, as in the editor's handleLoadTexture.
   pipeline.psxMaterials.forEach(m => {
     m.uniforms.map.value = tex;
     m.uniforms.uHasMap.value = true;
+    m.uniforms.diffuse.value.set(1, 1, 1);
   });
 }
 

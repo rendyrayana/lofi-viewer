@@ -33,7 +33,9 @@ export function loadModel(file, onProgress) {
 export function loadTexture(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
-    texLoader.load(url, tex => { URL.revokeObjectURL(url); resolve(tex); }, undefined, reject);
+    // Colour images are sRGB; without this the editor shows them washed out
+    // while GLB exports (tagged sRGB) show the true colours.
+    texLoader.load(url, tex => { tex.colorSpace = THREE.SRGBColorSpace; URL.revokeObjectURL(url); resolve(tex); }, undefined, reject);
   });
 }
 
