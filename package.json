@@ -1,6 +1,9 @@
 {
   "name": "lofi-viewer",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "From 3D scan to retro model and multi-color print",
+  "license": "MIT",
+  "author": "Rendy Rayana Herdiana Putra",
   "private": true,
   "type": "module",
   "scripts": {
