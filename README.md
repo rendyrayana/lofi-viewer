@@ -66,7 +66,7 @@ Open `http://localhost:3000`. Drop in a model to get started.
 
 ## Status
 
-Version 1.0. Research software developed as part of doctoral research on reproducing PlayStation-era aesthetics on 3D-scanned objects. Feedback and issues welcome.
+Version 1.0. Research software on reproducing PlayStation-era aesthetics on 3D-scanned objects. Feedback and issues welcome.
 
 ## License
 
