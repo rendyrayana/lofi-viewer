@@ -1,6 +1,6 @@
 import { store } from '../../store.js';
 
-export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, onClearScene }) {
+export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, onClearScene, onLoadSample }) {
   el.innerHTML = `
     <div class="panel">
       <section class="card">
@@ -13,6 +13,8 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
           </div>
           <input type="file" id="inp-tex" accept="image/*" hidden />
           <label for="inp-tex" class="btn btn-ghost btn-file">Load Texture Map<small class="btn-sub">for OBJ scans with a separate image</small></label>
+          <!-- TEMP SAMPLE: remove with public/samples/ -->
+          <button class="btn btn-ghost" id="btn-sample">Load Sample<small class="btn-sub">original daruma scan</small></button>
         </div>
       </section>
 
@@ -33,6 +35,9 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
     if (e.target.files[0]) onLoadModel(e.target.files[0]);
     e.target.value = '';
   });
+
+  // TEMP SAMPLE
+  el.querySelector('#btn-sample').addEventListener('click', () => onLoadSample());
 
   el.querySelector('#inp-tex').addEventListener('change', e => {
     if (e.target.files[0]) onLoadTexture(e.target.files[0]);

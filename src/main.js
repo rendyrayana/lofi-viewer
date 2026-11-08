@@ -83,6 +83,7 @@ function showPanel(tab) {
       onLoadModel: handleLoadModel,
       onLoadTexture: handleLoadTexture,
       onLoadHDRI: handleLoadHDRI,
+      onLoadSample: handleLoadSample, // TEMP SAMPLE
       onClearScene: handleClearScene,
     });
   } else if (tab === 'process') {
@@ -1184,6 +1185,14 @@ viewport.addEventListener('drop', async e => {
   if (model) await handleLoadModel(model);
   if (image && loadedModel) await handleLoadTexture(image);
 });
+
+// TEMP SAMPLE: the original daruma scan from public/samples/, loaded like a drop.
+async function handleLoadSample() {
+  const base = import.meta.env.BASE_URL + 'samples/';
+  const file = async (name, type) => new File([await (await fetch(base + name)).blob()], name, { type });
+  await handleLoadModel(await file('daruma.obj', 'text/plain'));
+  if (loadedModel) await handleLoadTexture(await file('daruma.jpg', 'image/jpeg'));
+}
 
 // Hint over the default cube until a model is loaded.
 const dropHint = document.createElement('div');
