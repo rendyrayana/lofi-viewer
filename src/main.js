@@ -1186,12 +1186,22 @@ viewport.addEventListener('drop', async e => {
   if (image && loadedModel) await handleLoadTexture(image);
 });
 
-// TEMP SAMPLE: the original daruma scan from public/samples/, loaded like a drop.
-async function handleLoadSample() {
+// TEMP SAMPLE: original scans from public/samples/, loaded like a drop, then
+// turned to their best view (azimuth in degrees around Y, front = 0).
+const SAMPLE_VIEW = { daruma: 205, teapot: 25 };
+async function handleLoadSample(name) {
   const base = import.meta.env.BASE_URL + 'samples/';
-  const file = async (name, type) => new File([await (await fetch(base + name)).blob()], name, { type });
-  await handleLoadModel(await file('daruma.obj', 'text/plain'));
-  if (loadedModel) await handleLoadTexture(await file('daruma.jpg', 'image/jpeg'));
+  const file = async (f, type) => new File([await (await fetch(base + f)).blob()], f, { type });
+  const [obj, jpg] = await Promise.all([file(name + '.obj', 'text/plain'), file(name + '.jpg', 'image/jpeg')]);
+  await handleLoadModel(obj);
+  if (!loadedModel) return;
+  await handleLoadTexture(jpg);
+  const t = sc.controls.target, a = THREE.MathUtils.degToRad(SAMPLE_VIEW[name] - 45);
+  for (const cam of [sc.perspCamera, sc.orthoCamera].filter(Boolean)) {
+    cam.position.sub(t).applyAxisAngle(new THREE.Vector3(0, 1, 0), a).add(t);
+    cam.lookAt(t);
+  }
+  sc.controls.update();
 }
 
 // Hint over the default cube until a model is loaded.

@@ -14,7 +14,8 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
           <input type="file" id="inp-tex" accept="image/*" hidden />
           <label for="inp-tex" class="btn btn-ghost btn-file">Load Texture Map<small class="btn-sub">for OBJ scans with a separate image</small></label>
           <!-- TEMP SAMPLE: remove with public/samples/ -->
-          <button class="btn btn-ghost" id="btn-sample">Load Sample<small class="btn-sub">original daruma scan</small></button>
+          <button class="btn btn-ghost" data-sample="daruma">Sample: Daruma<small class="btn-sub">original scan, textured</small></button>
+          <button class="btn btn-ghost" data-sample="teapot">Sample: Teapot<small class="btn-sub">original scan, textured</small></button>
         </div>
       </section>
 
@@ -37,7 +38,7 @@ export function buildImportPanel(el, { onLoadModel, onLoadTexture, onLoadHDRI, o
   });
 
   // TEMP SAMPLE
-  el.querySelector('#btn-sample').addEventListener('click', () => onLoadSample());
+  el.querySelectorAll('[data-sample]').forEach(b => b.addEventListener('click', () => onLoadSample(b.dataset.sample)));
 
   el.querySelector('#inp-tex').addEventListener('change', e => {
     if (e.target.files[0]) onLoadTexture(e.target.files[0]);
